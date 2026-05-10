@@ -1,0 +1,22 @@
+# weights (auto-downloaded)
+*.pt
+
+# exploration / generated
+notebooks/
+out/
+handoff/
+yolovex-handoff.zip
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+dist/
+build/
+
+# jupyter
+.ipynb_checkpoints/
+
+# os
+.DS_Store

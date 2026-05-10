@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>yolovex · SPPF layout test</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    .header {
+      padding: 18px 24px;
+      border-bottom: 1px solid #e2e8f0;
+      background: white;
+    }
+    .header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    .header p  { margin: 4px 0 0; font-size: 12px; color: #64748b; }
+    .canvas-wrap {
+      padding: 32px;
+      display: flex;
+      justify-content: center;
+    }
+    svg { background: white; border: 1px solid #e2e8f0; border-radius: 8px; }
+    .legend {
+      max-width: 760px;
+      margin: 24px auto 0;
+      font-size: 13px;
+      color: #475569;
+      line-height: 1.65;
+    }
+    .legend code {
+      background: #f1f5f9;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>yolovex · SPPF layout test</h1>
+    <p>Standalone canvas. Iterate on the inside-the-block fan-in layout here, then port back to <code>layout-l2.jsx</code>.</p>
+  </div>
+
+  <div class="canvas-wrap">
+    <div id="root"></div>
+  </div>
+
+  <div class="legend">
+    <p><strong>Layout rule</strong> (general — applies to any sub-merge node taking N sibling inputs):</p>
+    <ul>
+      <li>Each input gets its own row.</li>
+      <li>Input <code>i</code>'s LEFT edge sits at <code>i · STAIR_FRAC · L</code> from the merge's left edge (default <code>STAIR_FRAC = 0.6</code>).</li>
+      <li>Merge tile's width = <code>L · (1 + STAIR_FRAC · (N − 1))</code> — exactly spans from input 0's left edge to input N−1's right edge.</li>
+      <li><strong>Tap → merge</strong>: straight vertical line from input's bottom-mid down to merge's top edge. No curve.</li>
+      <li><strong>Sequential between inputs</strong>: right-mid of input <code>i</code> → top-mid of input <code>i+1</code>, smooth right-angle bezier (out, then down).</li>
+    </ul>
+  </div>
+
+  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+
+  <script type="text/babel">
+    // =========================================================================
+    // ---- LAYOUT KNOBS ----
+    // Edit these to tweak the SPPF layout.
+    // =========================================================================
+
+    const TILE_W = 120;          // = L (the base tile width)
+    const TILE_H = 46;
+    const STAIR_FRAC = 0.65;      // each input shifts right by this fraction of L
+
+    const ROW_GAP = 78;          // top-to-top distance between rows
+    const POST_MERGE_GAP = 78;   // gap between merge row and the row below it (cv2)
+
+    const CONTAINER_PAD_X      = 16;
+    const CONTAINER_PAD_TOP    = 30;
+    const CONTAINER_PAD_BOTTOM = 18;
+
+    const CONTAINER_X = 60;
+    const CONTAINER_Y = 60;
+
+    const SEQ_BEND = 22;         // length of the horizontal/vertical lead-in for the right-angle bezier between consecutive taps
+
+    const SEQ_COLOR = '#94a3b8';
+    const FANIN_COLOR = '#7c3aed';
+    const ACCENT = '#fb923c';
+
+    // The 4 taps that feed concat (in dataflow order). Each becomes one row in
+    // the staircase. The merge node and any post-merge nodes are listed below.
+    const TAPS = [
+      { path: 'cv1', label: 'Conv',       shape: '256×20×15', color: { fill: '#dcfce7', border: '#86efac', text: '#14532d' } },
+      { path: 'm.0', label: 'MaxPool ×1', shape: '128×20×15', color: { fill: '#e0f2fe', border: '#7dd3fc', text: '#0c4a6e' } },
+      { path: 'm.1', label: 'MaxPool ×2', shape: '128×20×15', color: { fill: '#e0f2fe', border: '#7dd3fc', text: '#0c4a6e' } },
+      { path: 'm.2', label: 'MaxPool ×3', shape: '128×20×15', color: { fill: '#e0f2fe', border: '#7dd3fc', text: '#0c4a6e' } },
+    ];
+    const MERGE = { path: 'concat', label: 'Concat',     shape: '512×20×15', color: { fill: '#ede9fe', border: '#c4b5fd', text: '#4c1d95' } };
+    const POST_MERGE = [
+      { path: 'cv2', label: 'Conv (cv2)', shape: '256×20×15', color: { fill: '#dcfce7', border: '#86efac', text: '#14532d' } },
+    ];
+
+    // =========================================================================
+    // ---- DERIVED PLACEMENT ----
+    // =========================================================================
+
+    function buildPlacement() {
+      const N = TAPS.length;
+
+      // Merge node spans from tap[0].left to tap[N-1].right.
+      // tap[i].x = i * STAIR_FRAC * TILE_W
+      // tap[N-1].x + TILE_W = (N-1)*STAIR_FRAC*TILE_W + TILE_W = TILE_W * (1 + STAIR_FRAC*(N-1))
+      const mergeW = TILE_W * (1 + STAIR_FRAC * (N - 1));
+
+      const innerLeft = CONTAINER_X + CONTAINER_PAD_X;
+      const innerW = mergeW;   // merge defines the inner width
+      const containerW = innerW + 2 * CONTAINER_PAD_X;
+
+      const subs = {};
+
+      // Tap rows (staircase)
+      let curY = CONTAINER_Y + CONTAINER_PAD_TOP;
+      TAPS.forEach((tap, i) => {
+        subs[tap.path] = {
+          ...tap,
+          x: innerLeft + i * STAIR_FRAC * TILE_W,
+          y: curY,
+          w: TILE_W,
+          h: TILE_H,
+        };
+        curY += ROW_GAP;
+      });
+
+      // Merge row — same width as merge, full inner area
+      subs[MERGE.path] = {
+        ...MERGE,
+        x: innerLeft,
+        y: curY,
+        w: mergeW,
+        h: TILE_H,
+      };
+      curY += POST_MERGE_GAP;
+
+      // Post-merge rows (cv2 etc.) — same width and x as merge (keeps the
+      // visual flow of "merged tensor continues downward")
+      POST_MERGE.forEach((post) => {
+        subs[post.path] = {
+          ...post,
+          x: innerLeft,
+          y: curY,
+          w: mergeW,
+          h: TILE_H,
+        };
+        curY += ROW_GAP;
+      });
+
+      const containerH = (curY - CONTAINER_Y) - (ROW_GAP - TILE_H) + CONTAINER_PAD_BOTTOM;
+
+      return {
+        container: { x: CONTAINER_X, y: CONTAINER_Y, w: containerW, h: containerH },
+        subs,
+      };
+    }
+
+    // =========================================================================
+    // ---- BEZIER / EDGE HELPERS ----
+    // =========================================================================
+
+    const leftPort  = (n) => ({ x: n.x,        y: n.y + n.h / 2 });
+    const rightPort = (n) => ({ x: n.x + n.w,  y: n.y + n.h / 2 });
+    const topPort   = (n) => ({ x: n.x + n.w/2, y: n.y });
+    const botPort   = (n) => ({ x: n.x + n.w/2, y: n.y + n.h });
+
+    // Right-angle bezier: leaves p1 going right, arrives at p2 going down.
+    // c1 sits to the right of p1 on p1's y line; c2 sits above p2 on p2's x line.
+    function rightAngleBezier(p1, p2, lead = SEQ_BEND) {
+      const c1 = { x: p1.x + lead, y: p1.y };
+      const c2 = { x: p2.x,        y: p2.y - lead };
+      return `M ${p1.x} ${p1.y} C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${p2.x} ${p2.y}`;
+    }
+
+    // Pure-vertical straight line — no curve. Used for tap → merge.
+    function verticalLine(p1, p2) {
+      return `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`;
+    }
+
+    // =========================================================================
+    // ---- RENDER ----
+    // =========================================================================
+
+    function App() {
+      const { container, subs } = buildPlacement();
+      const SVG_W = container.x + container.w + 80;
+      const SVG_H = container.y + container.h + 60;
+
+      return (
+        <svg width={SVG_W} height={SVG_H}>
+          <defs>
+            <marker id="arrow-seq"   viewBox="0 0 12 12" refX="11" refY="6" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+              <path d="M 0 0 L 12 6 L 0 12 L 3 6 z" fill={SEQ_COLOR} />
+            </marker>
+            <marker id="arrow-fanin" viewBox="0 0 12 12" refX="11" refY="6" markerWidth="11" markerHeight="11" markerUnits="userSpaceOnUse" orient="auto-start-reverse">
+              <path d="M 0 0 L 12 6 L 0 12 L 3 6 z" fill={FANIN_COLOR} />
+            </marker>
+          </defs>
+
+          {/* Container frame */}
+          <rect
+            x={container.x} y={container.y}
+            width={container.w} height={container.h}
+            rx="10"
+            fill="#fef9c3"
+            fillOpacity="0.30"
+            stroke="#fde047"
+            strokeWidth="1.4"
+          />
+          <text
+            x={container.x + 10}
+            y={container.y + 18}
+            fontSize="11"
+            fontWeight="600"
+            fill="#713f12"
+            fontFamily="ui-monospace, SFMono-Regular, monospace"
+          >
+            [9] SPPF
+          </text>
+          <text
+            x={container.x + container.w - 10}
+            y={container.y + 18}
+            fontSize="9"
+            fill="#713f12"
+            textAnchor="end"
+            fontFamily="ui-monospace, SFMono-Regular, monospace"
+            opacity="0.7"
+          >
+            1×256×20×15
+          </text>
+
+          {/* Sequential arrows between consecutive taps:
+              right-mid of tap i → top-mid of tap i+1, right-angle curve. */}
+          {TAPS.slice(0, -1).map((tap, i) => {
+            const a = subs[tap.path];
+            const b = subs[TAPS[i + 1].path];
+            return (
+              <path
+                key={`seq-${i}`}
+                d={rightAngleBezier(rightPort(a), topPort(b))}
+                fill="none"
+                stroke={SEQ_COLOR}
+                strokeWidth={1.2}
+                opacity={0.75}
+                markerEnd="url(#arrow-seq)"
+              />
+            );
+          })}
+
+          {/* Tap → Merge: straight vertical line from each tap's bottom-mid
+              down to the merge's top edge directly above the tap. */}
+          {TAPS.map((tap) => {
+            const a = subs[tap.path];
+            const m = subs[MERGE.path];
+            const p1 = botPort(a);
+            const p2 = { x: p1.x, y: m.y };  // straight down to merge's top
+            return (
+              <path
+                key={`tap-${tap.path}`}
+                d={verticalLine(p1, p2)}
+                fill="none"
+                stroke={FANIN_COLOR}
+                strokeWidth={1.2}
+                opacity={0.85}
+                markerEnd="url(#arrow-fanin)"
+              />
+            );
+          })}
+
+          {/* Merge → first post-merge node (cv2): straight vertical from
+              merge bottom-mid to cv2 top-mid. */}
+          {POST_MERGE.length > 0 && (() => {
+            const m = subs[MERGE.path];
+            const c = subs[POST_MERGE[0].path];
+            return (
+              <path
+                d={verticalLine(botPort(m), topPort(c))}
+                fill="none"
+                stroke={SEQ_COLOR}
+                strokeWidth={1.2}
+                opacity={0.75}
+                markerEnd="url(#arrow-seq)"
+              />
+            );
+          })()}
+
+          {/* Sub-node tiles */}
+          {Object.entries(subs).map(([path, n]) => (
+            <g key={path}>
+              <rect
+                x={n.x} y={n.y}
+                width={n.w} height={n.h}
+                rx="5"
+                fill={n.color.fill}
+                stroke={n.color.border}
+                strokeWidth={1}
+              />
+              <text
+                x={n.x + n.w / 2}
+                y={n.y + n.h / 2 - 3}
+                fontSize="11"
+                fontWeight="600"
+                fill={n.color.text}
+                textAnchor="middle"
+                fontFamily="ui-monospace, SFMono-Regular, monospace"
+              >
+                {n.label}
+              </text>
+              <text
+                x={n.x + n.w / 2}
+                y={n.y + n.h / 2 + 11}
+                fontSize="9"
+                fill={n.color.text}
+                textAnchor="middle"
+                fontFamily="ui-monospace, SFMono-Regular, monospace"
+                opacity="0.7"
+              >
+                {n.shape}
+              </text>
+            </g>
+          ))}
+
+          {/* Coordinate annotations — drop or keep as you like */}
+          {Object.entries(subs).map(([path, n]) => (
+            <text
+              key={`coord-${path}`}
+              x={n.x + n.w + 8}
+              y={n.y + 12}
+              fontSize="9"
+              fill="#94a3b8"
+              fontFamily="ui-monospace, SFMono-Regular, monospace"
+            >
+              {`(${Math.round(n.x)},${Math.round(n.y)})  ${Math.round(n.w)}×${Math.round(n.h)}`}
+            </text>
+          ))}
+        </svg>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
