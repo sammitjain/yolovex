@@ -1,8 +1,6 @@
 # yolovex
 
-Interactive YOLO architecture explainer, inspired by [CNN Explainer](https://poloclub.github.io/cnn-explainer/). Goal: let someone trace how an image flows through YOLO and develop intuition about what each block contributes to the final detection.
-
-Target model: **yolo26n** (Ultralytics, COCO-pretrained). Personal portfolio + learning project.
+Interactive YOLO architecture explainer, inspired by [CNN Explainer](https://poloclub.github.io/cnn-explainer/). My goal was to dive into the new YOLO26 model from Ultralytics and understand the architecture. This project will let you trace how an image flows through the architecture of YOLO (currently YOLO26n) and to develop an intuition about what each block/layer/operation contributions to the final object detection. 
 
 ## Setup
 
