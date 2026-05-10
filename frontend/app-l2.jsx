@@ -390,6 +390,119 @@ const FLOW_SPEEDS = {
   slow:   700,   // default — gives ~50s for a full pass
 };
 
+// ---------- Settings popover (gear in header) ----------
+//
+// Gear button in the header. Click to toggle a popover anchored below it
+// containing app-wide controls. Today: bezier "lead" lengths for edge
+// flattening. Future: more knobs land here too — that's why this is one
+// unified Settings popover rather than one panel per concern.
+function SettingsButton({ layoutParams, setLayoutParams }) {
+  const [open, setOpen] = useStateA2(false);
+  const wrapperRef = useRefA2(null);
+  const defaults = window.YV.DEFAULT_LAYOUT_PARAMS || {};
+
+  // Close on outside click.
+  useEffectA2(() => {
+    if (!open) return;
+    const onDoc = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  const update = (key, value) => setLayoutParams(p => ({ ...p, [key]: value }));
+  const reset = () => setLayoutParams({ ...defaults });
+
+  const Slider = ({ label, k, min, max }) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#475569' }}>
+        <span>{label}</span>
+        <span style={{ fontFamily: 'ui-monospace, SFMono-Regular, monospace' }}>{layoutParams[k]}</span>
+      </div>
+      <input
+        type="range"
+        min={min} max={max} step={1}
+        value={layoutParams[k]}
+        onChange={(e) => update(k, parseInt(e.target.value, 10))}
+        style={{ width: '100%' }}
+      />
+    </div>
+  );
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'relative', display: 'inline-flex' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        title="Settings"
+        aria-label="Settings"
+        style={{
+          width: 30, height: 30,
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          padding: 0,
+          background: open ? '#e2e8f0' : 'white',
+          border: '1px solid #cbd5e1',
+          borderRadius: 4,
+          cursor: 'pointer',
+          color: '#475569',
+          fontSize: 16,
+          lineHeight: 1,
+        }}
+      >
+        ⚙
+      </button>
+      {open && (
+        <div style={{
+          position: 'absolute',
+          top: 'calc(100% + 6px)',
+          right: 0,
+          zIndex: 20,
+          width: 240,
+          background: 'white',
+          border: '1px solid #e2e8f0',
+          borderRadius: 6,
+          boxShadow: '0 4px 12px rgba(0,0,0,0.10)',
+          padding: '12px 14px',
+        }}>
+          <div style={{
+            fontSize: 10, fontWeight: 700, color: '#64748b',
+            letterSpacing: '0.06em', textTransform: 'uppercase',
+            marginBottom: 8,
+          }}>
+            Edge layout — horizontal
+          </div>
+          <Slider label="entry tail" k="horizontalEntry" min={5} max={50} />
+          <Slider label="exit tail"  k="horizontalExit"  min={5} max={50} />
+          <div style={{
+            fontSize: 10, fontWeight: 700, color: '#64748b',
+            letterSpacing: '0.06em', textTransform: 'uppercase',
+            margin: '6px 0 8px',
+          }}>
+            Edge layout — vertical
+          </div>
+          <Slider label="entry tail" k="verticalEntry" min={5} max={50} />
+          <Slider label="exit tail"  k="verticalExit"  min={5} max={50} />
+          <button
+            onClick={reset}
+            style={{
+              width: '100%',
+              padding: '5px 8px',
+              fontSize: 11,
+              background: '#f1f5f9',
+              border: '1px solid #cbd5e1',
+              borderRadius: 4,
+              cursor: 'pointer',
+              color: '#475569',
+            }}
+          >
+            reset to defaults
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AppL2() {
   const { GraphL2, getArchL2, ROLE_COLORS, ACCENT } = window.YV;
   const arch_l2 = getArchL2();
@@ -400,6 +513,9 @@ function AppL2() {
   const [imageUrl, setImageUrl] = useStateA2('assets/sammit_lighthouse.jpg');
   const [pickerOpen, setPickerOpen] = useStateA2(false);
   const [flowSpeed, setFlowSpeed] = useStateA2('slow');
+  const [layoutParams, setLayoutParams] = useStateA2(
+    () => ({ ...(window.YV.DEFAULT_LAYOUT_PARAMS || {}) })
+  );
 
   // What the flow-overlay tile and graph focus should track. Priority:
   // playing > hovered > selected > nothing.
@@ -495,6 +611,7 @@ function AppL2() {
             </select>
           </div>
           <ImagePickerL2 open={pickerOpen} setOpen={setPickerOpen} onUpload={onUpload} setImageUrl={setImageUrl} currentUrl={imageUrl} />
+          <SettingsButton layoutParams={layoutParams} setLayoutParams={setLayoutParams} />
           <div className="attribution">made by <span>Sammit</span></div>
         </div>
       </header>
@@ -507,6 +624,7 @@ function AppL2() {
             onSelect={setSelectedId}
             onHover={setHoveredId}
             playingId={playingId}
+            layoutParams={layoutParams}
           />
           <FlowOverlay activeId={activeId} imageUrl={imageUrl} playing={playingId != null} />
         </div>

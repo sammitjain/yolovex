@@ -28,6 +28,20 @@ const CONTAINER_W = ATOMIC_W;                    // back-compat alias used in a 
 
 const SEQ_BEND = 22;               // lead length for the right-angle bezier between consecutive taps
 
+// ---- Bezier flattening tails ----
+// Each edge is drawn as: flat entry segment → tiny bezier bend → flat exit
+// segment. Entry and exit are independent so you can give the arrow side
+// extra length (helps the arrowhead read clean) and keep the source side
+// shorter, or vice versa. Horizontal applies to cross / detect / skip;
+// vertical applies to forward / vertical intra. The L2 settings panel passes
+// the params directly into edgePathL2 — no window roundtrip.
+const DEFAULT_LAYOUT_PARAMS = {
+  horizontalEntry: 30,
+  horizontalExit: 35,
+  verticalEntry: 5,
+  verticalExit: 10,
+};
+
 // ---- Per-parent layout ----
 //
 // Two flavours:
@@ -224,34 +238,62 @@ function rightPortL2(n) { return { x: n.x + n.w,  y: n.y + n.h / 2 }; }
 function topPortL2(n)   { return { x: n.x + n.w/2, y: n.y }; }
 function botPortL2(n)   { return { x: n.x + n.w/2, y: n.y + n.h }; }
 
-function detectPortL2(n, scale) {
-  // n is the sub-node rect for the detect head (head_p3/p4/p5)
-  return leftPortL2(n);
+// ---- Bezier helpers ----
+//
+// Piecewise path: dead-flat tail of length `lead` out of p1, a short cubic
+// bezier in the middle that does the actual bending, then a dead-flat tail
+// of length `lead` into p2. As `lead` grows the bend region shrinks, all the
+// way down to an almost-instant corner — the `cubic-bezier(1,0,0,1)` feel.
+// `lead` is clamped to (distance/2 − ε) so the two tails don't cross; once
+// they meet at the midpoint the path collapses to two collinear segments.
+//
+// flatBezier:           p1 ───── ⌒ ───── p2    (flat horizontal tails)
+// flatBezierVertical:   p1 │ ⌒ │ p2          (flat vertical tails)
+const BEND_EPS = 0.5;
+
+// Scale entry/exit proportionally if they'd otherwise meet/cross.
+function fitTails(entry, exit, span) {
+  const max = span - 2 * BEND_EPS;
+  const total = entry + exit;
+  if (total <= max) return [entry, exit];
+  const k = max / total;
+  return [entry * k, exit * k];
 }
 
-// ---- Bezier (copied from layout.jsx) ----
-function bezierL2(p1, p2, mode) {
-  if (!mode) mode = 'horizontal';
-  if (mode === 'vertical') {
-    const dy = p2.y - p1.y;
-    const c1y = p1.y + dy * 0.5;
-    const c2y = p2.y - dy * 0.5;
-    return `M ${p1.x} ${p1.y} C ${p1.x} ${c1y} ${p2.x} ${c2y} ${p2.x} ${p2.y}`;
-  }
-  if (mode === 'skip') {
-    const dx = p2.x - p1.x;
-    const sag = Math.min(140, Math.abs(dx) * 0.45);
-    const bow = Math.min(80, Math.abs(dx) * 0.18);
-    return `M ${p1.x} ${p1.y} C ${p1.x + sag} ${p1.y - bow} ${p2.x - sag} ${p2.y} ${p2.x} ${p2.y}`;
-  }
+function flatBezier(p1, p2, entry, exit) {
   const dx = p2.x - p1.x;
-  return `M ${p1.x} ${p1.y} C ${p1.x + dx * 0.5} ${p1.y} ${p2.x - dx * 0.5} ${p2.y} ${p2.x} ${p2.y}`;
+  const adx = Math.abs(dx);
+  if (adx < 1) {
+    return `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`;
+  }
+  const [e, x] = fitTails(entry, exit, adx);
+  const dir = dx >= 0 ? 1 : -1;
+  const q1x = p1.x + dir * e;
+  const q2x = p2.x - dir * x;
+  const midX = (q1x + q2x) / 2;
+  return `M ${p1.x} ${p1.y} L ${q1x} ${p1.y} C ${midX} ${p1.y} ${midX} ${p2.y} ${q2x} ${p2.y} L ${p2.x} ${p2.y}`;
+}
+
+function flatBezierVertical(p1, p2, entry, exit) {
+  const dy = p2.y - p1.y;
+  const ady = Math.abs(dy);
+  if (ady < 1) {
+    return `M ${p1.x} ${p1.y} L ${p2.x} ${p2.y}`;
+  }
+  const [e, x] = fitTails(entry, exit, ady);
+  const dir = dy >= 0 ? 1 : -1;
+  const q1y = p1.y + dir * e;
+  const q2y = p2.y - dir * x;
+  const midY = (q1y + q2y) / 2;
+  return `M ${p1.x} ${p1.y} L ${p1.x} ${q1y} C ${p1.x} ${midY} ${p2.x} ${midY} ${p2.x} ${q2y} L ${p2.x} ${p2.y}`;
 }
 
 // ---- Edge path computation ----
 
-function edgePathL2(edge, containers, subnodes) {
+function edgePathL2(edge, containers, subnodes, params) {
   const { from, to, kind } = edge;
+  const { horizontalEntry, horizontalExit, verticalEntry, verticalExit } =
+    { ...DEFAULT_LAYOUT_PARAMS, ...(params || {}) };
 
   // Resolve node positions — 'from'/'to' can be string sub-node id or numeric container idx
   function resolveNode(id) {
@@ -275,12 +317,12 @@ function edgePathL2(edge, containers, subnodes) {
     const containerIdx = typeof to === 'number' ? to : parseInt(to, 10);
     const targetContainer = containers[containerIdx] || b;
     const port = leftPortL2(targetContainer);   // dead center of the left edge
-    return skipBezier(rightPortL2(a), port);
+    return flatBezier(rightPortL2(a), port, horizontalEntry, horizontalExit);
   }
 
   if (kind.startsWith('detect-')) {
     // detect-pX edges go to the specific detect sub-node left port
-    return bezierL2(rightPortL2(a), leftPortL2(b), 'horizontal');
+    return flatBezier(rightPortL2(a), leftPortL2(b), horizontalEntry, horizontalExit);
   }
 
   if (kind === 'fanin') {
@@ -307,14 +349,14 @@ function edgePathL2(edge, containers, subnodes) {
     //      line when source and target share x.
     const sameRow = Math.abs(a.y - b.y) < 1;
     if (sameRow) {
-      return bezierL2(rightPortL2(a), leftPortL2(b), 'horizontal');
+      return flatBezier(rightPortL2(a), leftPortL2(b), horizontalEntry, horizontalExit);
     }
     if (a.role === 'tap' && b.role === 'tap') {
       if (a.y < b.y) return rightAngleBezier(rightPortL2(a), topPortL2(b));
       return rightAngleBezier(rightPortL2(a), botPortL2(b));
     }
-    if (a.y < b.y) return bezierL2(botPortL2(a), topPortL2(b), 'vertical');
-    return bezierL2(topPortL2(a), botPortL2(b), 'vertical');
+    if (a.y < b.y) return flatBezierVertical(botPortL2(a), topPortL2(b), verticalEntry, verticalExit);
+    return flatBezierVertical(topPortL2(a), botPortL2(b), verticalEntry, verticalExit);
   }
 
   // Inter-container edges: kind is 'forward' (same column) or 'cross'
@@ -323,39 +365,15 @@ function edgePathL2(edge, containers, subnodes) {
   // arrows collapse to a clean vertical line because the source's last sub
   // and the target's first sub share an x.
   if (kind === 'cross') {
-    return bezierL2(rightPortL2(a), leftPortL2(b), 'horizontal');
+    return flatBezier(rightPortL2(a), leftPortL2(b), horizontalEntry, horizontalExit);
   }
   if (kind === 'forward') {
-    if (a.y < b.y) return bezierL2(botPortL2(a), topPortL2(b), 'vertical');
-    return bezierL2(topPortL2(a), botPortL2(b), 'vertical');
+    if (a.y < b.y) return flatBezierVertical(botPortL2(a), topPortL2(b), verticalEntry, verticalExit);
+    return flatBezierVertical(topPortL2(a), botPortL2(b), verticalEntry, verticalExit);
   }
 
-  return bezierL2(rightPortL2(a), leftPortL2(b), 'horizontal');
+  return flatBezier(rightPortL2(a), leftPortL2(b), horizontalEntry, horizontalExit);
 }
-
-// Skip-edge bezier with a long FLAT approach to the target. The last control
-// point sits a generous distance to the left of p2 at exactly the same y, so
-// the curve enters the arrowhead along a near-perfect horizontal tangent —
-// and the arrowhead lines up symmetrically with the line.
-function skipBezier(p1, p2) {
-  const dx = p2.x - p1.x;
-  const dy = p2.y - p1.y;
-  // First leg: source leaves to the right, with a vertical bow that matches
-  // the y-distance between p1 and p2 so the curve actually clears intermediate
-  // nodes when source is far above/below the target.
-  const leg = Math.max(80, Math.abs(dx) * 0.35);
-  const bow = Math.min(60, Math.abs(dy) * 0.18);
-  const c1 = { x: p1.x + leg, y: p1.y + (dy < 0 ? -bow : bow) * 0.0 };  // mostly horizontal departure
-  // Second leg: SAME y as p2, nice and far back from p2 so the arrow lands flat.
-  const flat = Math.max(60, Math.abs(dx) * 0.30);
-  const c2 = { x: p2.x - flat, y: p2.y };
-  return `M ${p1.x} ${p1.y} C ${c1.x} ${c1.y} ${c2.x} ${c2.y} ${p2.x} ${p2.y}`;
-}
-
-// (FANIN_ROUTES / fanInRoute removed — the staircase layout means each tap
-// already sits at a unique x position, so the tap → merge connection is
-// just a straight vertical line at the tap's center x. No special routing,
-// no bus detour, no per-tap landing offsets.)
 
 // Right-angle bezier — leaves p1 horizontally to the right, arrives at p2
 // vertically (going down if p2 is below p1, going up if p2 is above). Used
@@ -376,3 +394,4 @@ window.YV.SUB_NODE_W = TILE_W;
 window.YV.SUB_NODE_H = TILE_H;
 window.YV.TILE_W = TILE_W;
 window.YV.TILE_H = TILE_H;
+window.YV.DEFAULT_LAYOUT_PARAMS = DEFAULT_LAYOUT_PARAMS;

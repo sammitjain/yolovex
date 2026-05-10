@@ -2,7 +2,7 @@
 
 const { useState: useStateG2, useRef: useRefG2, useEffect: useEffectG2, useMemo: useMemoG2, useCallback: useCallbackG2 } = React;
 
-function GraphL2({ selectedId, hoveredId, onSelect, onHover, playingId }) {
+function GraphL2({ selectedId, hoveredId, onSelect, onHover, playingId, layoutParams }) {
   const {
     getArchL2, getEdgesInterL2, getEdgesIntraL2,
     layoutGraphL2, edgePathL2,
@@ -214,7 +214,7 @@ function GraphL2({ selectedId, hoveredId, onSelect, onHover, playingId }) {
 
           {/* Edges */}
           {allEdges.map((edge, i) => {
-            const path = edgePathL2(edge, containers, subnodes);
+            const path = edgePathL2(edge, containers, subnodes, layoutParams);
             if (!path) return null;
             const focused = isEdgeFocused(edge);
             const isSkip = edge.kind === 'skip' || edge.kind.startsWith('detect-');
