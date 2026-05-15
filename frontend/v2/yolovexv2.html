@@ -3,14 +3,32 @@
 <head>
   <meta charset="utf-8" />
   <title>yolovex v2 — YOLO26 Architecture (L1)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
+    :root {
+      --bg: #fdfdfc;
+      --bg-tint: #fbf8f4;
+      --ink: #1f2328;
+      --ink-2: #475569;
+      --ink-3: #64748b;
+      --ink-4: #94a3b8;
+      --line: #e2e8f0;
+      --line-2: #cbd5e1;
+      --accent: #fb923c;
+      --shadow-sm: 0 1px 2px rgba(15,23,42,.04);
+      --shadow-md: 0 8px 24px rgba(15,23,42,.08);
+    }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { height: 100%; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      color: #1e293b;
-      background: #f8fafc;
+      font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
     }
+    .mono, .mono * { font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
+    button { font-family: inherit; cursor: pointer; }
     .app { height: 100%; display: flex; flex-direction: column; }
 
     .app-header {
@@ -64,6 +82,180 @@
     }
     .zoom-controls button:hover { background: #f1f5f9; }
     .zoom-controls .fit-btn { font-size: 14px; }
+
+    /* ============== FLOATING OVERLAY (hover-driven) ============== */
+    .flow-overlay {
+      position: absolute; top: 14px; right: 14px;
+      width: 256px;     /* tweak me — overlay tile size; aspect ratio is auto */
+      background: rgba(255,255,255,0.96);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--line); border-radius: 10px;
+      box-shadow: var(--shadow-md);
+      padding: 10px; pointer-events: none; z-index: 5;
+      transition: border-color 200ms;
+    }
+    .flow-overlay__frame {
+      position: relative; width: 100%;
+      overflow: hidden; border-radius: 6px;
+      background: #0f172a;
+    }
+    .flow-overlay__frame img {
+      width: 100%; height: 100%; display: block;
+      /* Stretch every activation to fill the same aspect-ratio box as the
+         input image so spatial comparison is consistent across nodes with
+         different intermediate resolutions. */
+      object-fit: fill;
+    }
+    .flow-overlay__caption {
+      margin-top: 8px; font-size: 12.5px; font-weight: 600;
+      color: var(--ink); font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .flow-overlay__sub {
+      font-size: 10.5px; color: var(--ink-3);
+      font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* ============== DETAIL PANEL (L2-style) ============== */
+    .detail-panel {
+      position: absolute; top: 0; right: 0; bottom: 0;
+      width: 640px;     /* tweak me — side panel width */
+      background: white;
+      border-left: 1px solid var(--line);
+      overflow-y: auto; z-index: 20;
+      box-shadow: -8px 0 32px rgba(15,23,42,.06);
+      display: none;
+    }
+    .detail-panel.open {
+      display: block;
+      animation: panel-slide-in 280ms cubic-bezier(.16,1,.3,1);
+    }
+    @keyframes panel-slide-in {
+      from { transform: translateX(40px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .panel-inner { padding: 22px 24px 60px; }
+    .panel-header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      gap: 16px; padding-bottom: 18px;
+      border-bottom: 1px solid var(--line); margin-bottom: 18px;
+    }
+    .panel-title { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+    .panel-idx { font-family: 'IBM Plex Mono', monospace; color: var(--ink-3); font-weight: 500; font-size: 18px; }
+    .panel-desc { font-size: 13px; color: var(--ink-2); margin-top: 6px; margin-bottom: 10px; text-wrap: pretty; }
+    .panel-path-hint {
+      margin-top: 6px; font-size: 11.5px; color: var(--ink-3);
+    }
+    .panel-path-hint code {
+      font-family: 'IBM Plex Mono', monospace; font-size: 11.5px;
+      background: var(--bg-tint); padding: 1px 5px; border-radius: 3px; color: var(--ink);
+    }
+    .role-pill {
+      display: inline-block; padding: 2px 10px; border-radius: 999px;
+      font-size: 10.5px; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .close-btn {
+      width: 28px; height: 28px; border-radius: 6px;
+      border: 1px solid var(--line); background: white;
+      color: var(--ink-3); font-size: 18px; line-height: 1; flex-shrink: 0;
+    }
+    .close-btn:hover { border-color: var(--ink-4); color: var(--ink); }
+
+    .panel-section { margin-bottom: 28px; }
+    .section-label {
+      font-size: 11px; color: var(--ink-3); text-transform: uppercase;
+      letter-spacing: 0.08em; font-weight: 600; margin: 0 0 12px;
+    }
+    .micro-help { font-size: 12px; color: var(--ink-3); margin: 0 0 14px; text-wrap: pretty; }
+
+    /* I/O strip */
+    .io-strip {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px; background: var(--bg-tint);
+      border: 1px solid var(--line); border-radius: 8px;
+    }
+    .io-tile {
+      border-radius: 4px;
+      box-shadow: 0 1px 2px rgba(0,0,0,.06);
+      object-fit: fill;       /* stretch — consistent with the floating overlay */
+      background: #0f172a;
+    }
+    .arrow { color: var(--ink-4); font-size: 18px; }
+    .io-pair { display: flex; align-items: center; gap: 6px; }
+    .plus { color: var(--ink-4); font-weight: 600; }
+    .shape-caption {
+      font-family: 'IBM Plex Mono', monospace; font-size: 11.5px;
+      color: var(--ink-2); margin-top: 8px; padding-left: 4px;
+    }
+
+    /* Channel brochure */
+    .channel-brochure {
+      display: flex; gap: 14px; align-items: flex-start;
+      background: var(--bg-tint); border: 1px solid var(--line);
+      border-radius: 8px; padding: 14px;
+    }
+    .brochure-preview { flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+    .brochure-meta {
+      font-size: 11px; color: var(--ink-3);
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .meta-row { display: flex; justify-content: space-between; gap: 8px; }
+    .meta-row .meta-k { color: var(--ink-3); }
+    .meta-row .meta-v { color: var(--ink); }
+    .meta-row .meta-v.mono { font-family: 'IBM Plex Mono', monospace; }
+
+    .brochure-grid {
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 5px; flex: 1; align-content: start;
+    }
+    .brochure-thumb {
+      position: relative; padding: 0; background: white;
+      border: 1px solid var(--line); border-radius: 4px;
+      cursor: pointer; overflow: hidden;
+      transition: transform 120ms, border-color 120ms, box-shadow 120ms;
+    }
+    .brochure-thumb img { display: block; width: 100%; height: auto; }
+    .brochure-thumb:hover, .brochure-thumb.hovered {
+      border-color: var(--ink-4);
+      transform: translateY(-1px);
+      box-shadow: 0 3px 8px rgba(15,23,42,.10);
+    }
+    .brochure-thumb.pinned {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(251,146,60,.22);
+    }
+    .thumb-idx {
+      position: absolute; bottom: 2px; right: 3px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 9px;
+      color: white; background: rgba(15,23,42,.7);
+      padding: 0 4px; border-radius: 2px; line-height: 1.4;
+    }
+    .stack-caption { font-size: 11.5px; color: var(--ink-2); margin-top: 8px; }
+
+    /* Stats grid */
+    .stats-grid { display: grid; grid-template-columns: 1fr; gap: 6px; }
+    .stats-grid > div {
+      display: flex; justify-content: space-between;
+      padding: 6px 10px; background: var(--bg-tint);
+      border-radius: 4px; font-size: 12px;
+    }
+    .stats-grid .k { color: var(--ink-3); }
+    .stats-grid .v { color: var(--ink); font-weight: 500; }
+    .stats-grid .v.mono { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; }
+
+    /* Deferred placeholder card (e.g. Detect) */
+    .panel-deferred {
+      padding: 14px; background: #fef9c3;
+      border: 1px solid #fde68a; border-radius: 8px;
+      color: #713f12; font-size: 13px; line-height: 1.5;
+    }
+    .panel-empty {
+      padding: 14px; background: var(--bg-tint);
+      border: 1px dashed var(--line-2); border-radius: 8px;
+      color: var(--ink-3); font-size: 12.5px; line-height: 1.5;
+    }
   </style>
 </head>
 <body>
@@ -75,6 +267,9 @@
 
   <!-- Generated by the spec-viewer pipeline (yolovex.block_spec): specs + instances + edges -->
   <script src="../spec-data.js"></script>
+
+  <!-- Generated by `yolovex build-assets-v2`: per-fx-node activations as window.YV_ACT -->
+  <script src="../activations-v2.js"></script>
 
   <!-- v2 source -->
   <script type="text/babel" src="arch-v2.jsx"></script>

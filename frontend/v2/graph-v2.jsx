@@ -12,7 +12,12 @@ function formatShape(sh) {
   return null;
 }
 
-function GraphV2({ selectedIdx, hoveredIdx, onSelect, onHover, onExpandedCountChange }) {
+function GraphV2({ selected, hover, onSelect, onHover, onExpandedCountChange }) {
+  // L1-block id derived from the unified hover/select payload; the styling
+  // logic below (edge dimming, lift, selected glow) is L1-only, so sub-node
+  // hovers still focus their parent block.
+  const hoveredIdx = hover ? hover.idx : null;
+  const selectedIdx = selected ? selected.idx : null;
   const V = window.YVV2;
   const arch = useMemo(() => V.buildArch(), []);
   const rawEdges = useMemo(() => V.buildEdges(), []);
@@ -270,6 +275,7 @@ function GraphV2({ selectedIdx, hoveredIdx, onSelect, onHover, onExpandedCountCh
               isSkipSource={skipSources.has(b.idx)}
               colorScheme={TYPE_COLORS[b.type] || TYPE_COLORS.Conv}
               onHover={onHover}
+              onSelect={onSelect}
               onToggleExpand={toggleExpand}
               onToggleSubExpand={toggleSubExpand}
               accent={ACCENT}
@@ -303,7 +309,7 @@ function GraphV2({ selectedIdx, hoveredIdx, onSelect, onHover, onExpandedCountCh
   );
 }
 
-function NodeV2({ block, node, hovered, selected, dimmed, isSkipSource, colorScheme, onHover, onToggleExpand, onToggleSubExpand, accent }) {
+function NodeV2({ block, node, hovered, selected, dimmed, isSkipSource, colorScheme, onHover, onSelect, onToggleExpand, onToggleSubExpand, accent }) {
   const lift = hovered ? 1.02 : 1;
   const opacity = dimmed ? 0.35 : 1;
   const isDetect = block.type === 'Detect';
@@ -315,14 +321,15 @@ function NodeV2({ block, node, hovered, selected, dimmed, isSkipSource, colorSch
       data-node={block.idx}
       transform={`translate(${node.x}, ${node.y})`}
       style={{ cursor: 'pointer', opacity, transition: 'opacity 200ms' }}
-      onMouseEnter={() => onHover(block.idx)}
+      onMouseEnter={() => onHover({ idx: block.idx, pathKey: null })}
       onMouseLeave={() => onHover(null)}
       onClick={(e) => {
-        // Bare clicks on the region background (after sub-nodes / containers
-        // stop propagation) toggle the WHOLE block; non-expanded nodes always
-        // toggle.
+        // Shift+click expands/collapses; bare left-click opens the activation
+        // panel. Sub-nodes / containers stopPropagation, so bare clicks on the
+        // region background still hit this handler.
         e.stopPropagation();
-        onToggleExpand(block.idx);
+        if (e.shiftKey) onToggleExpand(block.idx);
+        else onSelect({ idx: block.idx, pathKey: null });
       }}
     >
       {expanded ? (
@@ -331,6 +338,8 @@ function NodeV2({ block, node, hovered, selected, dimmed, isSkipSource, colorSch
           node={node}
           colorScheme={colorScheme}
           accent={accent}
+          onHover={onHover}
+          onSelect={onSelect}
           onToggleSubExpand={onToggleSubExpand}
         />
       ) : (
@@ -381,7 +390,30 @@ function NodeV2({ block, node, hovered, selected, dimmed, isSkipSource, colorSch
 // Expanded block — the region box (block label up top) with its internal
 // component sub-graph rendered inside. All sub-node / sub-edge coords are
 // LOCAL to the region, so they sit inside the node's translate(node.x,node.y).
-function ExpandedNodeV2({ block, node, colorScheme, accent, onToggleSubExpand }) {
+// Collect fx node names whose visible_path begins with `containerPath`, in
+// graph order. The container's "output" is the last such node; the "input
+// boundary" is the first one. Used by hover / click on an inner container
+// rect so it reports the container's OWN activation — i.e. the tensor that
+// would be produced if you hadn't peeled it open.
+function fxMembersInContainer(specId, containerPath) {
+  if (!specId || !containerPath || !containerPath.length) return [];
+  const spec = window.YV_SPEC?.specs?.[specId];
+  if (!spec) return [];
+  const out = [];
+  for (const n of spec.graph.nodes) {
+    if (n.op === 'placeholder' || n.op === 'output' || n.op === 'get_attr') continue;
+    const vp = n.visible_path || n.path || [];
+    if (vp.length < containerPath.length) continue;
+    let match = true;
+    for (let i = 0; i < containerPath.length; i++) {
+      if (vp[i] !== containerPath[i]) { match = false; break; }
+    }
+    if (match) out.push(n.name);
+  }
+  return out;
+}
+
+function ExpandedNodeV2({ block, node, colorScheme, accent, onHover, onSelect, onToggleSubExpand }) {
   const { SUB_KIND_COLORS, subFormatShape } = window.YVV2;
   const region = node.region;
   return (
@@ -401,25 +433,44 @@ function ExpandedNodeV2({ block, node, colorScheme, accent, onToggleSubExpand })
       </text>
 
       {/* Inner containers — drawn FIRST so edges + nodes paint on top.
-          Clicking a container's label collapses that recursive expansion. */}
-      {(region.innerContainers || []).map(ic => (
-        <g key={`ic-${ic.pathKey}`}>
-          <rect
-            x={ic.x} y={ic.y} width={ic.w} height={ic.h} rx="8"
-            fill="#eef2ff" fillOpacity="0.45"
-            stroke="#a5b4fc" strokeWidth="1" strokeDasharray="4 3"
-          />
-          <text
-            x={ic.x + ic.w - 10} y={ic.y + 14}
-            fontSize="10.5" fontWeight="600" fill="#3730a3"
-            fontFamily="ui-monospace, monospace" textAnchor="end"
-            style={{ cursor: 'pointer' }}
-            onClick={(e) => { e.stopPropagation(); onToggleSubExpand(block.idx, ic.pathKey); }}
-          >
-            {ic.label} ▴
-          </text>
-        </g>
-      ))}
+          Hovering / clicking the rect surfaces the container's OWN activation
+          (the output tensor of its last fx node — same as before this group
+          was peeled open). The ▴ label is a dedicated collapse affordance. */}
+      {(region.innerContainers || []).map(ic => {
+        const members = fxMembersInContainer(block.specId, ic.path);
+        const fxKey = members.length ? members[members.length - 1] : null;
+        const firstFxKey = members.length ? members[0] : null;
+        const payload = { idx: block.idx, pathKey: ic.pathKey, fxKey, firstFxKey, members, subkind: 'container' };
+        const onEnter = (e) => { e.stopPropagation(); onHover && onHover(payload); };
+        const onLeave = (e) => { e.stopPropagation(); onHover && onHover(null); };
+        const onClickRect = (e) => {
+          e.stopPropagation();
+          if (e.shiftKey) onToggleSubExpand(block.idx, ic.pathKey);
+          else onSelect && onSelect(payload);
+        };
+        return (
+          <g key={`ic-${ic.pathKey}`}>
+            <rect
+              x={ic.x} y={ic.y} width={ic.w} height={ic.h} rx="8"
+              fill="#eef2ff" fillOpacity="0.45"
+              stroke="#a5b4fc" strokeWidth="1" strokeDasharray="4 3"
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={onEnter}
+              onMouseLeave={onLeave}
+              onClick={onClickRect}
+            />
+            <text
+              x={ic.x + ic.w - 10} y={ic.y + 14}
+              fontSize="10.5" fontWeight="600" fill="#3730a3"
+              fontFamily="ui-monospace, monospace" textAnchor="end"
+              style={{ cursor: 'pointer' }}
+              onClick={(e) => { e.stopPropagation(); onToggleSubExpand(block.idx, ic.pathKey); }}
+            >
+              {ic.label} ▴
+            </text>
+          </g>
+        );
+      })}
 
       {/* Internal sub-edges */}
       {region.subEdges.map((e, i) => (
@@ -446,6 +497,8 @@ function ExpandedNodeV2({ block, node, colorScheme, accent, onToggleSubExpand })
           key={sn.id}
           sn={sn}
           blockIdx={block.idx}
+          onHover={onHover}
+          onSelect={onSelect}
           onToggleSubExpand={onToggleSubExpand}
           SUB_KIND_COLORS={SUB_KIND_COLORS}
           subFormatShape={subFormatShape}
@@ -455,18 +508,33 @@ function ExpandedNodeV2({ block, node, colorScheme, accent, onToggleSubExpand })
   );
 }
 
-function SubNodeV2({ sn, blockIdx, onToggleSubExpand, SUB_KIND_COLORS, subFormatShape }) {
+function SubNodeV2({ sn, blockIdx, onHover, onSelect, onToggleSubExpand, SUB_KIND_COLORS, subFormatShape }) {
   const sk = sn.subkind;
-  const clickable = sn.expandable;
-  const handleClick = clickable
-    ? (e) => { e.stopPropagation(); onToggleSubExpand(blockIdx, sn.pathKey); }
-    : undefined;
-  const cursor = clickable ? 'pointer' : 'default';
+  const expandable = sn.expandable;
+  // Lookup key for activations: the last fx-graph member of this group. For a
+  // fully-revealed leaf, members[0] === sn.id. For an aggregated group the
+  // last member's output IS the group's output tensor (matches the shape
+  // already shown on the node).
+  const members = sn.members || [sn.id];
+  const fxKey = members[members.length - 1];
+  const firstFxKey = members[0];
+  const hoverPayload = { idx: blockIdx, pathKey: sn.pathKey, fxKey, firstFxKey, members, subkind: sk };
+  const onEnter = onHover ? (e) => { e.stopPropagation(); onHover(hoverPayload); } : undefined;
+  const onLeave = onHover ? (e) => { e.stopPropagation(); onHover(null); } : undefined;
+  const handleClick = (e) => {
+    e.stopPropagation();
+    if (e.shiftKey && expandable) {
+      onToggleSubExpand(blockIdx, sn.pathKey);
+    } else if (onSelect) {
+      onSelect(hoverPayload);
+    }
+  };
+  const cursor = 'pointer';
 
   if (sk === 'arith') {
     const cx = sn.x + sn.w / 2, cy = sn.y + sn.h / 2;
     return (
-      <g>
+      <g style={{ cursor }} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={handleClick}>
         <circle cx={cx} cy={cy} r={sn.w / 2} fill="#fef3c7" stroke="#f59e0b" strokeWidth="1.5" />
         <text x={cx} y={cy + 5} fontSize="15" fontWeight="700" fill="#78350f" textAnchor="middle">
           {({ add: '+', mul: '×', sub: '−', truediv: '÷' }[sn.label] || sn.label.replace(/^fn:/, '') || '·')}
@@ -480,7 +548,7 @@ function SubNodeV2({ sn, blockIdx, onToggleSubExpand, SUB_KIND_COLORS, subFormat
     const stroke = sk === 'attr' ? '#a78bfa' : '#94a3b8';
     const text   = sk === 'attr' ? '#4c1d95' : '#475569';
     return (
-      <g>
+      <g style={{ cursor }} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={handleClick}>
         <rect x={sn.x} y={sn.y} width={sn.w} height={sn.h} rx="4"
           fill={fill} stroke={stroke} strokeWidth="1" strokeDasharray="3 2" />
         <text x={sn.x + sn.w / 2} y={sn.y + sn.h / 2 + 4} fontSize="10.5" fill={text}
@@ -494,10 +562,10 @@ function SubNodeV2({ sn, blockIdx, onToggleSubExpand, SUB_KIND_COLORS, subFormat
   const c = SUB_KIND_COLORS[sk] || SUB_KIND_COLORS.mod;
   const sh = subFormatShape(sn.shape);
   return (
-    <g style={{ cursor }} onClick={handleClick}>
+    <g style={{ cursor }} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={handleClick}>
       <rect x={sn.x} y={sn.y} width={sn.w} height={sn.h} rx="6"
-        fill={c.fill} stroke={c.border} strokeWidth={clickable ? 2 : 1.5}
-        strokeDasharray={clickable ? '6 3' : undefined} />
+        fill={c.fill} stroke={c.border} strokeWidth={expandable ? 2 : 1.5}
+        strokeDasharray={expandable ? '6 3' : undefined} />
       <text x={sn.x + sn.w / 2} y={sn.y + sn.h / 2 + (sh ? -2 : 4)} fontSize="12" fontWeight="600"
         fill={c.text} textAnchor="middle">
         {sn.label}
@@ -508,8 +576,8 @@ function SubNodeV2({ sn, blockIdx, onToggleSubExpand, SUB_KIND_COLORS, subFormat
           {sh}
         </text>
       )}
-      {/* Expandable indicator — small chevron in the top-right corner. */}
-      {clickable && (
+      {/* Expandable indicator — small chevron in the top-right corner. Hint that shift+click peels open. */}
+      {expandable && (
         <text x={sn.x + sn.w - 8} y={sn.y + 12} fontSize="11" fontWeight="700"
           fill={c.text} opacity="0.75" textAnchor="end">
           ▾

@@ -291,6 +291,30 @@ def build_assets_l2_cmd(
     )
 
 
+@app.command("build-assets-v2")
+def build_assets_v2_cmd(
+    image: Path = typer.Option(DEFAULT_IMAGE, "--image", "-i"),
+    imgsz: int = typer.Option(640, "--imgsz"),
+    weights: str = typer.Option(DEFAULT_WEIGHTS, "--weights", "-w"),
+    out: Path = typer.Option(Path("frontend/activations-v2.js"), "--out"),
+):
+    """Render per-fx-node activations to activations-v2.js for the v2 frontend."""
+    from .build_assets_v2 import build as v2_build, write_activations_js
+
+    if not image.exists():
+        typer.echo(f"image not found: {image}", err=True)
+        raise typer.Exit(code=2)
+    typer.echo(f"running v2 activation capture on {image}...")
+    data = v2_build(image, weights=weights, imgsz=imgsz)
+    write_activations_js(data, out)
+    n_blocks = len(data["nodes"])
+    n_subs = sum(len(b.get("sub", {})) for b in data["nodes"].values())
+    typer.echo(
+        f"saved {out} — {n_blocks} blocks, {n_subs} sub-nodes, "
+        f"skipped={data['meta']['skipped']}, {out.stat().st_size // 1024} KB"
+    )
+
+
 @app.command()
 def graph(
     image: Path = typer.Option(DEFAULT_IMAGE, "--image", "-i"),

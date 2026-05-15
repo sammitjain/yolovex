@@ -8,10 +8,10 @@
 
 // ===================== TUNABLE SPACING — tweak these ======================
 // Everything that controls how the canvas is spaced out lives here.
-const ROW_GAP        = 110;  // vertical gap between consecutive blocks in a column
+const ROW_GAP        = 100;  // vertical gap between consecutive blocks in a column
 const COL_GAP        = 360;  // horizontal gap between the two neck columns (FPN-up / PAN-down)
 const CONTAINER_GAP  = 100;  // uniform horizontal gap between the Backbone | Neck | Head containers
-const NECK_Y_OFFSET  = 120;  // how far down the whole neck region sits — breathing room below the backbone
+const NECK_Y_OFFSET  = 10;  // how far down the whole neck region sits — breathing room below the backbone
 const DETECT_GAP     = 100;   // vertical gap between the P3 / P4 / P5 detect boxes (taller Head container)
 
 // Edge bezier flat-tail leads — each edge is a flat tail out of the source,
@@ -402,7 +402,10 @@ function computeContainers(arch, nodes) {
   const left   = foot.x - CONTAINER_PAD;
   const right  = body.x2 + CONTAINER_PAD;
   const top    = body.y - CONTAINER_PAD_T;
-  const bottom = foot.y2 + CONTAINER_PAD;
+  // Bottom edge must accommodate whichever side runs deeper: foot (SPPF/C2PSA
+  // expansion) OR body (any C3k2 in cols 1-2 expanding downward). Was foot-only,
+  // which silently clipped body expansions.
+  const bottom = Math.max(foot.y2, body.y2) + CONTAINER_PAD;
   // Neck body's left edge hugs the first neck column (just CONTAINER_PAD of
   // breathing room) — independent of CONTAINER_GAP, so widening the gaps
   // between containers no longer opens dead space inside the neck body. The

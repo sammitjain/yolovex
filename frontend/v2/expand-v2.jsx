@@ -970,6 +970,12 @@ function buildExpansion(idx, opts) {
     shape: n.shape,
     pathKey: n.pathKey,
     expandable: !!n.expandable,
+    // Carry the fx-node membership through to the renderer so activation
+    // lookup can use members[-1] (group output) and members[0] (group input
+    // boundary). Aggregated groups (e.g. unexpanded `cv1` with three fx
+    // members) would otherwise lose this and fall back to the group id —
+    // which isn't an fx name and won't be in YV_ACT.sub.
+    members: n.members || [n.id],
     x: pos[n.id].x, y: pos[n.id].y, w: pos[n.id].w, h: pos[n.id].h,
   }));
 
