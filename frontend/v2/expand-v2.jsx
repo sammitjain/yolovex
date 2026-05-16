@@ -764,14 +764,30 @@ function subEdgePath(edge, layout, stairs, nodesById) {
 }
 
 // ===================== render styling (shared with graph-v2) ===============
-const SUB_KIND_COLORS = {
-  io:     { fill: '#e2e8f0', border: '#94a3b8', text: '#1e293b' },
-  mod:    { fill: '#dcfce7', border: '#22c55e', text: '#14532d' },
-  module: { fill: '#dcfce7', border: '#22c55e', text: '#14532d' },
-  op:     { fill: '#fed7aa', border: '#fb923c', text: '#7c2d12' },
-  cat:    { fill: '#fde68a', border: '#f59e0b', text: '#78350f' },
-  split:  { fill: '#dbeafe', border: '#3b82f6', text: '#1e3a8a' },
+// Sub-kind palettes — one per theme. mod / module coordinate with the Conv
+// family (green); op is warm orange (matches accent hue); cat is amber; split
+// is blue. Dark variants mute the fills and keep borders bright enough to read.
+const SUB_KIND_COLORS_LIGHT = {
+  io:     { fill: '#eeede8', border: '#8a8680', text: '#3a3630' },
+  mod:    { fill: '#d8f0e4', border: '#2a9450', text: '#123c22' },
+  module: { fill: '#d8f0e4', border: '#2a9450', text: '#123c22' },
+  op:     { fill: '#feeee0', border: '#c86838', text: '#5a2008' },
+  cat:    { fill: '#fef6c8', border: '#b08814', text: '#4c3800' },
+  split:  { fill: '#d8e8fc', border: '#4070c8', text: '#0c2658' },
 };
+
+const SUB_KIND_COLORS_DARK = {
+  io:     { fill: '#252a34', border: '#485060', text: '#98a4b0' },
+  mod:    { fill: '#1a2e24', border: '#34784a', text: '#90d4a8' },
+  module: { fill: '#1a2e24', border: '#34784a', text: '#90d4a8' },
+  op:     { fill: '#2c1e14', border: '#b86030', text: '#f0b888' },
+  cat:    { fill: '#2a2410', border: '#a07c1c', text: '#f0d890' },
+  split:  { fill: '#16203e', border: '#3860a8', text: '#88b0e0' },
+};
+
+// Back-compat alias — any direct reference (or destructure from window.YVV2)
+// gets the light set. graph-v2's ExpandedNodeV2 switches to _DARK by theme prop.
+const SUB_KIND_COLORS = SUB_KIND_COLORS_LIGHT;
 
 function subFormatShape(sh) {
   if (!sh) return '';
@@ -1008,7 +1024,9 @@ function buildExpansion(idx, opts) {
 }
 
 window.YVV2 = window.YVV2 || {};
-window.YVV2.buildExpansion   = buildExpansion;
-window.YVV2.SUB_KIND_COLORS  = SUB_KIND_COLORS;
-window.YVV2.subFormatShape   = subFormatShape;
-window.YVV2.opShortName      = opShortName;
+window.YVV2.buildExpansion       = buildExpansion;
+window.YVV2.SUB_KIND_COLORS      = SUB_KIND_COLORS_LIGHT;  // alias for back-compat
+window.YVV2.SUB_KIND_COLORS_LIGHT = SUB_KIND_COLORS_LIGHT;
+window.YVV2.SUB_KIND_COLORS_DARK  = SUB_KIND_COLORS_DARK;
+window.YVV2.subFormatShape       = subFormatShape;
+window.YVV2.opShortName          = opShortName;

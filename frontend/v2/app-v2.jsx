@@ -660,6 +660,11 @@ function DetectPanelV2({ selected, block, archBlock, roleColor, role, onClose })
 function DetailPanelV2({ selected, onClose, panelRef }) {
   const [pinnedCh, setPinnedCh] = useState(0);
   const [hoveredCh, setHoveredCh] = useState(null);
+  // How many of the available top-K thumbs to render. The backend emits up to
+  // 16 (TOP_K_CHANNELS); the user can lower this for a tighter view. The grid
+  // is auto-fill, so the visible columns adapt to whatever K + thumb size
+  // produces — last row may have fewer items.
+  const [topK, setTopK] = useState(8);
 
   // Reset pinned/hovered when the selection changes.
   useEffect(() => { setPinnedCh(0); setHoveredCh(null); }, [selected?.idx, selected?.fxKey, selected?.pathKey]);
@@ -768,11 +773,28 @@ function DetailPanelV2({ selected, onClose, panelRef }) {
 
             {visibleCh > 0 && (
               <section className="panel-section">
-                <h4 className="section-label">Channel stack</h4>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <h4 className="section-label" style={{ margin: 0 }}>Channel stack</h4>
+                  <div className="topk-control">
+                    <span>Top</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={visibleCh}
+                      step={1}
+                      value={Math.min(topK, visibleCh)}
+                      onChange={(e) => {
+                        const v = parseInt(e.target.value, 10);
+                        if (Number.isFinite(v)) setTopK(Math.max(1, Math.min(visibleCh, v)));
+                      }}
+                    />
+                    <span>of {visibleCh}</span>
+                  </div>
+                </div>
                 <div className="channel-brochure">
                   <div className="brochure-preview">
                     <img
-                      src={act.topK[activeCh]}
+                      src={act.topK[Math.min(activeCh, visibleCh - 1)]}
                       alt={`channel ${trueChIdx(activeCh)}`}
                       style={{
                         width: 170, height: 210,
@@ -796,7 +818,7 @@ function DetailPanelV2({ selected, onClose, panelRef }) {
                     </div>
                   </div>
                   <div className="brochure-grid" onMouseLeave={() => setHoveredCh(null)}>
-                    {act.topK.map((b64, i) => (
+                    {act.topK.slice(0, Math.min(topK, visibleCh)).map((b64, i) => (
                       <button
                         key={i}
                         className={`brochure-thumb ${pinnedCh === i ? 'pinned' : ''} ${hoveredCh === i ? 'hovered' : ''}`}
@@ -811,7 +833,7 @@ function DetailPanelV2({ selected, onClose, panelRef }) {
                   </div>
                 </div>
                 <div className="stack-caption">
-                  Showing {visibleCh} of {act.totalChannels} channels, ranked by mean |activation|.
+                  Showing top {Math.min(topK, visibleCh)} of {act.totalChannels} channels, ranked by mean |activation|.
                 </div>
               </section>
             )}
@@ -905,10 +927,18 @@ function SettingsPanel({ rev, bump, onClose }) {
 
   const reset = () => {
     Object.keys(DEF).forEach(k => { LS[k] = DEF[k]; });
+    // Restore the active theme's block + role palette (drops user color edits).
+    const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+    const TP = window.YVV2.TYPE_PALETTES[theme];
+    const RP = window.YVV2.ROLE_PALETTES[theme];
+    LS.TYPE_PALETTE = Object.fromEntries(Object.entries(TP).map(([k, v]) => [k, { ...v }]));
+    LS.ROLE_PALETTE = { ...RP };
+    LS.ACCENT_COLOR = window.YVV2.ACCENTS[theme];
     // Reset CSS variables (just remove inline overrides so :root takes over).
     CSS_TOKENS.forEach(t => document.documentElement.style.removeProperty(t.name));
     document.documentElement.style.removeProperty('--brochure-thumb-scale');
     document.documentElement.style.removeProperty('--scale-grid-cell-scale');
+    document.documentElement.style.removeProperty('--accent');
     bump();
   };
 
@@ -939,6 +969,60 @@ function SettingsPanel({ rev, bump, onClose }) {
             ))}
           </div>
         ))}
+
+        <div className="settings-group">
+          <div className="settings-group-label">Block palette</div>
+          {Object.keys(LS.TYPE_PALETTE).map(type => {
+            const entry = LS.TYPE_PALETTE[type];
+            const setSlot = (slot, val) => {
+              LS.TYPE_PALETTE = {
+                ...LS.TYPE_PALETTE,
+                [type]: { ...LS.TYPE_PALETTE[type], [slot]: val },
+              };
+              bump();
+            };
+            return (
+              <div key={type} className="settings-palette-row">
+                <span className="settings-palette-type">{type}</span>
+                {['fill', 'border', 'text'].map(slot => (
+                  <div key={slot} className="settings-palette-slot" title={`${type} ${slot}`}>
+                    <input
+                      type="color"
+                      value={entry[slot]}
+                      onChange={(e) => setSlot(slot, e.target.value)}
+                    />
+                    <span className="slot-label">{slot}</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          <div className="settings-group-label" style={{ marginTop: 10 }}>Role colors</div>
+          {Object.keys(LS.ROLE_PALETTE).map(role => (
+            <div key={role} className="settings-row">
+              <label>{role}</label>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  type="color"
+                  value={LS.ROLE_PALETTE[role]}
+                  onChange={(e) => {
+                    LS.ROLE_PALETTE = { ...LS.ROLE_PALETTE, [role]: e.target.value };
+                    bump();
+                  }}
+                />
+                <input
+                  type="text"
+                  value={LS.ROLE_PALETTE[role]}
+                  onChange={(e) => {
+                    LS.ROLE_PALETTE = { ...LS.ROLE_PALETTE, [role]: e.target.value };
+                    bump();
+                  }}
+                  style={{ width: 76 }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
 
         <div className="settings-group">
           <div className="settings-group-label">Colors (SVG)</div>
@@ -1001,6 +1085,14 @@ function SettingsPanel({ rev, bump, onClose }) {
             />
           </div>
           <div className="settings-row">
+            <label>Brochure thumb min (px)</label>
+            <input
+              type="number" step="2" min="32" max="160"
+              defaultValue={parseInt(readCssVar('--brochure-thumb-min'), 10) || 52}
+              onChange={(e) => setCssVar('--brochure-thumb-min', `${e.target.value}px`)}
+            />
+          </div>
+          <div className="settings-row">
             <label>Scale-grid cell scale</label>
             <input
               type="number" step="0.05" min="0.3" max="1.2"
@@ -1045,14 +1137,29 @@ function AppV2() {
       const next = prev === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
       const LS = window.YVV2.LAYOUT_SETTINGS;
-      const DEF = window.YVV2.LAYOUT_SETTINGS_DEFAULTS;
+      // Block palette + role colors swap to the active theme's preset. User
+      // edits in the Settings drawer overwrite individual entries afterwards;
+      // toggling the theme again rebases on the new preset, dropping prior edits.
+      const TP = window.YVV2.TYPE_PALETTES[next];
+      const RP = window.YVV2.ROLE_PALETTES[next];
+      LS.TYPE_PALETTE = Object.fromEntries(Object.entries(TP).map(([k, v]) => [k, { ...v }]));
+      LS.ROLE_PALETTE = { ...RP };
+      LS.ACCENT_COLOR = window.YVV2.ACCENTS[next];
       if (next === 'dark') {
-        LS.EDGE_COLOR_DEFAULT = '#64748b';
-        LS.EDGE_COLOR_DIMMED  = '#334155';
+        // Calibrated to sit clearly above the dark #0c1118 graph canvas
+        // without competing with the focused accent.
+        LS.EDGE_COLOR_DEFAULT = '#2a4058';
+        LS.EDGE_COLOR_DIMMED  = '#1a2c40';
+        LS.EDGE_COLOR_FOCUSED = LS.ACCENT_COLOR;
       } else {
+        const DEF = window.YVV2.LAYOUT_SETTINGS_DEFAULTS;
         LS.EDGE_COLOR_DEFAULT = DEF.EDGE_COLOR_DEFAULT;
         LS.EDGE_COLOR_DIMMED  = DEF.EDGE_COLOR_DIMMED;
+        LS.EDGE_COLOR_FOCUSED = LS.ACCENT_COLOR;
       }
+      // Drive the CSS --accent var too so non-SVG accents (panel border,
+      // brochure pinned glow, etc.) follow the theme.
+      document.documentElement.style.setProperty('--accent', LS.ACCENT_COLOR);
       setSettingsRev(r => r + 1);
       return next;
     });

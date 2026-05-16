@@ -28,19 +28,26 @@ const LAYOUT_SETTINGS_DEFAULTS = {
   COL_TOP:        80,
   CONTAINER_PAD:  18,
   CONTAINER_PAD_T: 28,
-  EDGE_STROKE_DEFAULT:  1.4,
-  EDGE_STROKE_FOCUSED:  2.2,
-  CONTAINER_DASH:       '4 4',
-  ACCENT_COLOR:         '#fb923c',
-  EDGE_COLOR_DEFAULT:   '#94a3b8',
-  EDGE_COLOR_DIMMED:    '#cbd5e1',
-  EDGE_COLOR_FOCUSED:   '#fb923c',
+  EDGE_STROKE_DEFAULT:  1.2,
+  EDGE_STROKE_FOCUSED:  2.0,
+  CONTAINER_DASH:       '6 4',
+  ACCENT_COLOR:         '#c8682e',
+  EDGE_COLOR_DEFAULT:   '#9aa8b8',
+  EDGE_COLOR_DIMMED:    '#c4ccd8',
+  EDGE_COLOR_FOCUSED:   '#c8682e',
 };
 
 window.YVV2 = window.YVV2 || {};
 window.YVV2.LAYOUT_SETTINGS_DEFAULTS = LAYOUT_SETTINGS_DEFAULTS;
-if (!window.YVV2.LAYOUT_SETTINGS) {
-  window.YVV2.LAYOUT_SETTINGS = { ...LAYOUT_SETTINGS_DEFAULTS };
+// arch-v2.jsx loads first and seeds LAYOUT_SETTINGS with palette keys; we fill
+// any spacing / size / stroke defaults that aren't already present. Mutating
+// the EXISTING object (not replacing) is critical — arch-v2's palette proxies
+// would otherwise hold a stale reference and never see Settings-drawer edits.
+window.YVV2.LAYOUT_SETTINGS = window.YVV2.LAYOUT_SETTINGS || {};
+for (const k of Object.keys(LAYOUT_SETTINGS_DEFAULTS)) {
+  if (!(k in window.YVV2.LAYOUT_SETTINGS)) {
+    window.YVV2.LAYOUT_SETTINGS[k] = LAYOUT_SETTINGS_DEFAULTS[k];
+  }
 }
 const S = () => window.YVV2.LAYOUT_SETTINGS;
 

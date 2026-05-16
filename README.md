@@ -4,6 +4,10 @@
 
 You can drill into every block, peel it open down to the leaf modules (Conv2d, BN, SiLU, MaxPool, attention internals, …), and see the actual activations the network produces on a real image.
 
+![yolovex v2 in dark mode — full YOLO26n graph with the floating activation tile in the corner](results/yolovex_v2_full_dark_2.jpg)
+
+![yolovex v2 in light mode — same graph, calm warm-paper palette](results/yolovex_v2_full_2.jpg)
+
 ![Hovering a Conv block — the floating tile shows that block's mean activation](results/screenshot_arch_conv_hover.jpg)
 
 ## What's in here
@@ -14,7 +18,7 @@ You can drill into every block, peel it open down to the leaf modules (Conv2d, B
 
 ![C3k2 block expanded — every sub-component is a node you can hover or click](results/screenshot_arch_c3k2_expanded.jpg)
 
-- **Click a node and a side panel opens** with the full story: the input(s) feeding in, the output coming out, a top-16 channel brochure (hover to preview, click to pin), and the tensor's shape + statistics. A short learner-friendly blurb tells you what that layer type is actually doing.
+- **Click a node and a side panel opens** with the full story: the input(s) feeding in, the output coming out, a top-N channel brochure (pick N yourself; auto-fill grid — hover a thumb to preview, click to pin), and the tensor's shape + statistics. A short learner-friendly blurb tells you what that layer type is actually doing.
 
 ![Side panel — input/output, channel stack, and stats for the selected sub-module](results/screenshot_arch_C3k2_panel.jpg)
 
@@ -42,7 +46,7 @@ Once it's open:
 - **Detect side panel** — clicking the Detect head (or P3 / P4 / P5) opens a panel with bbox overlay on the input image, a confidence slider plus a numeric input (type any value for runners-up), a horizontal bar chart of survivors colored by class, and a per-class score heatmap grid (rows = top-N classes by peak, columns = P3 / P4 / P5 — choose how many classes to show, capped at 12). Class names come from `model.names`, not hardcoded — drop in any image and the panel adapts.
 - **Play flow** — the ▶ button in the header animates the active activation through every currently-rendered node in dataflow order. Expand a block first and the traversal walks its internals. Slow / medium / fast speed. The run ends on the Detect head's annotated bbox frame, which sticks around as the "final result" until you hover something else or play again. Nodes without a 4-D tensor (e.g. `chunk`, elementwise `add`) keep showing the previous step's activation instead of snapping back to the raw input.
 - **Settings drawer** — ⚙ in the header. Live-tune all the layout constants (row / col gaps, container padding, node size, edge tail lengths, neck offsets — split into independent foot and body), edge / accent colors, container dash, CSS tokens, and the brochure / scale-grid tile scales. Reset restores defaults.
-- **Light / dark theme** — ☾ button in the bottom-right zoom cluster flips the page chrome, panels, and graph canvas. SVG node fills stay light pastel by design so they pop against the dark canvas.
+- **Light / dark theme** — ☾ button in the bottom-right zoom cluster flips everything: page chrome, panels, graph canvas, block palette, inner-container nesting tints, edge colors, and accents. Light is calm warm-paper with pastel blocks; dark is deep navy-slate with colored-glass fills (each block type keeps its hue, but at lower lightness with bright borders so it reads against the dark canvas instead of into it).
 
 ## CLI tour
 

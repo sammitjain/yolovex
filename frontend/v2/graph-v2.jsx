@@ -127,9 +127,13 @@ function GraphV2({ selected, hover, playing, onSelect, onHover, onExpandedCountC
     if (onVisibleOrderChange) onVisibleOrderChange(visibleOrder);
   }, [visibleOrder, onVisibleOrderChange]);
 
+  // TYPE_COLORS / ROLE_COLORS are Proxy-backed live getters (see arch-v2.jsx)
+  // so palette / theme changes pick up automatically when settingsRev bumps.
   const { TYPE_COLORS, ROLE_COLORS } = V;
   const LS = window.YVV2.LAYOUT_SETTINGS;
   const ACCENT = LS.ACCENT_COLOR;
+  // referenced so the linter and useMemo dep tracker see palette identity changes
+  void settingsRev;
   const EDGE_DEFAULT = LS.EDGE_COLOR_DEFAULT;
   const EDGE_DIMMED = LS.EDGE_COLOR_DIMMED;
   const EDGE_FOCUSED = LS.EDGE_COLOR_FOCUSED;
@@ -220,9 +224,10 @@ function GraphV2({ selected, hover, playing, onSelect, onHover, onExpandedCountC
     };
   }, []);
 
-  // playing takes priority for focus (so edges to/from the active step pop),
-  // then hover, then selection.
-  const focusIdx = playingIdx ?? hoveredIdx ?? selectedIdx;
+  // Edge accent + neighbor dimming follow hover/selection only — during a flow
+  // play we just glow the playing node itself, without changing the rest of
+  // the canvas (otherwise the whole graph dims/redraws every step).
+  const focusIdx = hoveredIdx ?? selectedIdx;
   const isEdgeFocused = (e) => focusIdx != null && (e.src === focusIdx || e.dst === focusIdx);
   const connectedTo = (idx, other) =>
     edgeMeta.some(e => (e.src === idx && e.dst === other) || (e.dst === idx && e.src === other));
@@ -237,19 +242,25 @@ function GraphV2({ selected, hover, playing, onSelect, onHover, onExpandedCountC
       <svg width={containerSize.w} height={containerSize.h} style={{ display: 'block' }}>
         <defs>
           <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#94a3b8" />
+            <path d="M 0 0 L 10 5 L 0 10 z" fill={EDGE_DEFAULT} />
           </marker>
           <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
             <path d="M 0 0 L 10 5 L 0 10 z" fill={ACCENT} />
           </marker>
           <marker id="arrow-dim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#cbd5e1" opacity="0.4" />
+            <path d="M 0 0 L 10 5 L 0 10 z" fill={EDGE_DEFAULT} opacity="0.35" />
           </marker>
-          <filter id="node-shadow" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="4" stdDeviation="6" floodOpacity="0.12" />
+          {/* Three named state filters — replaces the old node-shadow/node-glow
+              pair so hover, selected, and playing each occupy their own visual
+              register (subtle drop / warm ambient glow / beacon glow). */}
+          <filter id="node-hover" x="-40%" y="-40%" width="180%" height="180%">
+            <feDropShadow dx="0" dy="3" stdDeviation="5" floodOpacity="0.13" />
           </filter>
-          <filter id="node-glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="0" stdDeviation="8" floodColor={ACCENT} floodOpacity="0.6" />
+          <filter id="node-selected" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="2" stdDeviation="7" floodColor={ACCENT} floodOpacity="0.28" />
+          </filter>
+          <filter id="node-playing" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="0" stdDeviation="11" floodColor={ACCENT} floodOpacity="0.72" />
           </filter>
         </defs>
 
@@ -320,6 +331,7 @@ function GraphV2({ selected, hover, playing, onSelect, onHover, onExpandedCountC
               dimmed={focusIdx != null && focusIdx !== b.idx && !connectedTo(focusIdx, b.idx)}
               isSkipSource={skipSources.has(b.idx)}
               colorScheme={TYPE_COLORS[b.type] || TYPE_COLORS.Conv}
+              theme={theme}
               onHover={onHover}
               onSelect={onSelect}
               onToggleExpand={toggleExpand}
@@ -328,17 +340,27 @@ function GraphV2({ selected, hover, playing, onSelect, onHover, onExpandedCountC
             />
           ))}
 
-          {/* Input image marker (left of the backbone). */}
-          <g transform={`translate(${nodes[0].x - 110}, ${nodes[0].y - 4})`}>
-            <rect width="80" height="60" rx="6" fill="#f1f5f9" stroke="#cbd5e1" strokeWidth="1" />
-            <text x="40" y="34" fontSize="9" fill="#64748b" textAnchor="middle" fontFamily="ui-monospace, monospace">input</text>
-            <text x="40" y="46" fontSize="9" fill="#94a3b8" textAnchor="middle" fontFamily="ui-monospace, monospace">(1,3,640,480)</text>
-          </g>
-          <path
-            d={`M ${nodes[0].x - 30} ${nodes[0].y + 26} L ${nodes[0].x} ${nodes[0].y + 26}`}
-            stroke="#94a3b8" strokeWidth="1" opacity="0.5" fill="none"
-            markerEnd="url(#arrow-gray)"
-          />
+          {/* Input image marker (left of the backbone). Theme-aware so the
+              neutral fill doesn't disappear into the dark canvas. */}
+          {(() => {
+            const inputFill   = theme === 'dark' ? '#1a2535' : '#f0ede8';
+            const inputStroke = theme === 'dark' ? '#304555' : '#c0bab2';
+            const inputText   = theme === 'dark' ? '#5a7a96' : '#7a7470';
+            return (
+              <>
+                <g transform={`translate(${nodes[0].x - 110}, ${nodes[0].y - 4})`}>
+                  <rect width="80" height="60" rx="6" fill={inputFill} stroke={inputStroke} strokeWidth="1" />
+                  <text x="40" y="34" fontSize="9" fill={inputText} textAnchor="middle" fontFamily="ui-monospace, monospace">input</text>
+                  <text x="40" y="46" fontSize="9" fill={inputText} textAnchor="middle" fontFamily="ui-monospace, monospace">(1,3,640,480)</text>
+                </g>
+                <path
+                  d={`M ${nodes[0].x - 30} ${nodes[0].y + 26} L ${nodes[0].x} ${nodes[0].y + 26}`}
+                  stroke={EDGE_DEFAULT} strokeWidth="1" opacity="0.5" fill="none"
+                  markerEnd="url(#arrow-gray)"
+                />
+              </>
+            );
+          })()}
         </g>
       </svg>
 
@@ -361,8 +383,11 @@ function GraphV2({ selected, hover, playing, onSelect, onHover, onExpandedCountC
   );
 }
 
-function NodeV2({ block, node, hovered, selected, playing, playingFx, dimmed, isSkipSource, colorScheme, onHover, onSelect, onToggleExpand, onToggleSubExpand, accent }) {
-  const lift = (playing && !node.expanded) ? 1.05 : (hovered ? 1.02 : 1);
+function NodeV2({ block, node, hovered, selected, playing, playingFx, dimmed, isSkipSource, colorScheme, theme, onHover, onSelect, onToggleExpand, onToggleSubExpand, accent }) {
+  // Only "playing" lifts; hover stays at scale 1 (heavier type-colored border
+  // is the hover cue instead). This separates the three interaction states
+  // into distinct visual registers.
+  const lift = (playing && !node.expanded) ? 1.05 : 1;
   const opacity = dimmed ? 0.35 : 1;
   const isDetect = block.type === 'Detect';
   const shape = formatShape(block.outputShape);
@@ -391,6 +416,7 @@ function NodeV2({ block, node, hovered, selected, playing, playingFx, dimmed, is
           colorScheme={colorScheme}
           accent={accent}
           playingFx={playingFx}
+          theme={theme}
           onHover={onHover}
           onSelect={onSelect}
           onToggleSubExpand={onToggleSubExpand}
@@ -400,8 +426,11 @@ function NodeV2({ block, node, hovered, selected, playing, playingFx, dimmed, is
           style={{
             transformOrigin: `${node.w / 2}px ${node.h / 2}px`,
             transform: `scale(${lift})`,
-            transition: 'transform 180ms cubic-bezier(.4,0,.2,1)',
-            filter: (playing || selected) ? 'url(#node-glow)' : (hovered ? 'url(#node-shadow)' : 'none'),
+            transition: 'transform 180ms cubic-bezier(.4,0,.2,1), filter 160ms',
+            filter: playing  ? 'url(#node-playing)'
+                  : selected ? 'url(#node-selected)'
+                  : hovered  ? 'url(#node-hover)'
+                  : 'none',
           }}
         >
           {isDetect ? (
@@ -412,7 +441,7 @@ function NodeV2({ block, node, hovered, selected, playing, playingFx, dimmed, is
                 width={node.w} height={node.h} rx="8"
                 fill={colorScheme.fill}
                 stroke={(selected || playing) ? accent : colorScheme.border}
-                strokeWidth={(selected || playing) ? 2 : 1}
+                strokeWidth={playing ? 3 : selected ? 2.5 : hovered ? 2 : 1}
               />
               <text x="12" y="22" fontSize="11" fontWeight="500" fill={colorScheme.text}
                 fontFamily="ui-monospace, SFMono-Regular, monospace" opacity="0.7">
@@ -466,8 +495,30 @@ function fxMembersInContainer(specId, containerPath) {
   return out;
 }
 
-function ExpandedNodeV2({ block, node, colorScheme, accent, playingFx, onHover, onSelect, onToggleSubExpand }) {
-  const { SUB_KIND_COLORS, subFormatShape } = window.YVV2;
+// Inner-container chrome stepped by depth: depth-1 is the outermost peel,
+// depth-2 sits inside that, depth-3+ is anything deeper (clamped). Fills get
+// slightly denser and dashes get tighter as you descend, signaling "you are
+// deeper" without competing with the block's type color (which dresses the
+// outermost expanded region itself).
+const IC_STYLES = {
+  light: [
+    { fill: '#f0eef8', fOpacity: 0.45, stroke: '#9080c8', sw: 1.5, dash: '5 3' },
+    { fill: '#e8e4f2', fOpacity: 0.50, stroke: '#7060a8', sw: 1.2, dash: '4 2' },
+    { fill: '#e0dcea', fOpacity: 0.55, stroke: '#5040a0', sw: 1.0, dash: '3 2' },
+  ],
+  dark: [
+    { fill: '#28244a', fOpacity: 0.45, stroke: '#7068c0', sw: 1.5, dash: '5 3' },
+    { fill: '#201e3c', fOpacity: 0.55, stroke: '#5850a8', sw: 1.2, dash: '4 2' },
+    { fill: '#181830', fOpacity: 0.65, stroke: '#403880', sw: 1.0, dash: '3 2' },
+  ],
+};
+
+function ExpandedNodeV2({ block, node, colorScheme, accent, playingFx, theme, onHover, onSelect, onToggleSubExpand }) {
+  const SKC = theme === 'dark'
+    ? window.YVV2.SUB_KIND_COLORS_DARK
+    : window.YVV2.SUB_KIND_COLORS_LIGHT;
+  const { subFormatShape } = window.YVV2;
+  const icSet = IC_STYLES[theme] || IC_STYLES.light;
   const region = node.region;
   return (
     <g>
@@ -501,12 +552,15 @@ function ExpandedNodeV2({ block, node, colorScheme, accent, playingFx, onHover, 
           if (e.shiftKey) onToggleSubExpand(block.idx, ic.pathKey);
           else onSelect && onSelect(payload);
         };
+        // ic.depth = path length (1 = outermost peel inside the block, 2 = one
+        // level deeper, 3+ = clamped). Pick the matching IC style row.
+        const s = icSet[Math.min((ic.depth || 1) - 1, icSet.length - 1)];
         return (
           <g key={`ic-${ic.pathKey}`}>
             <rect
               x={ic.x} y={ic.y} width={ic.w} height={ic.h} rx="8"
-              fill="#eef2ff" fillOpacity="0.45"
-              stroke="#a5b4fc" strokeWidth="1" strokeDasharray="4 3"
+              fill={s.fill} fillOpacity={s.fOpacity}
+              stroke={s.stroke} strokeWidth={s.sw} strokeDasharray={s.dash}
               style={{ cursor: 'pointer' }}
               onMouseEnter={onEnter}
               onMouseLeave={onLeave}
@@ -514,7 +568,7 @@ function ExpandedNodeV2({ block, node, colorScheme, accent, playingFx, onHover, 
             />
             <text
               x={ic.x + ic.w - 10} y={ic.y + 14}
-              fontSize="10.5" fontWeight="600" fill="#3730a3"
+              fontSize="10.5" fontWeight="600" fill={s.stroke}
               fontFamily="ui-monospace, monospace" textAnchor="end"
               style={{ cursor: 'pointer' }}
               onClick={(e) => { e.stopPropagation(); onToggleSubExpand(block.idx, ic.pathKey); }}
@@ -564,7 +618,7 @@ function ExpandedNodeV2({ block, node, colorScheme, accent, playingFx, onHover, 
             onHover={onHover}
             onSelect={onSelect}
             onToggleSubExpand={onToggleSubExpand}
-            SUB_KIND_COLORS={SUB_KIND_COLORS}
+            SUB_KIND_COLORS={SKC}
             subFormatShape={subFormatShape}
           />
         );
@@ -627,7 +681,7 @@ function SubNodeV2({ sn, blockIdx, playing, accent, onHover, onSelect, onToggleS
   const c = SUB_KIND_COLORS[sk] || SUB_KIND_COLORS.mod;
   const sh = subFormatShape(sn.shape);
   return (
-    <g style={{ cursor, filter: playing ? 'url(#node-glow)' : undefined }} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={handleClick}>
+    <g style={{ cursor, filter: playing ? 'url(#node-playing)' : undefined }} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={handleClick}>
       <rect x={sn.x} y={sn.y} width={sn.w} height={sn.h} rx="6"
         fill={c.fill} stroke={playing ? accent : c.border} strokeWidth={playing ? 2.5 : (expandable ? 2 : 1.5)}
         strokeDasharray={expandable ? '6 3' : undefined} />

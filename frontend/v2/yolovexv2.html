@@ -8,49 +8,54 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #fdfdfc;
-      --bg-tint: #fbf8f4;
-      --ink: #1f2328;
-      --ink-2: #475569;
-      --ink-3: #64748b;
-      --ink-4: #94a3b8;
-      --line: #e2e8f0;
-      --line-2: #cbd5e1;
-      --accent: #fb923c;
-      --shadow-sm: 0 1px 2px rgba(15,23,42,.04);
-      --shadow-md: 0 8px 24px rgba(15,23,42,.08);
+      --bg:                  #fafaf8;
+      --bg-tint:             #f3f2ef;
+      --panel:               #ffffff;
+      --graph-bg:            #f5f4f0;
+      --code-bg:             #eeecea;
 
-      /* Surfaces that aren't pure --bg (graph canvas, panel chrome, etc.). */
-      --panel: #ffffff;
-      --graph-bg: #f8fafc;
-      --code-bg: var(--bg-tint);
+      --ink:                 #1c2028;
+      --ink-2:               #4c5668;
+      --ink-3:               #78889a;
+      --ink-4:               #a8b4c0;
 
-      /* Top-16 channel brochure thumbs — multiplies the grid width.
-         0.7 = 30% smaller. Tweak between 0.5 and 1.0.
-         (Only the thumb grid scales; the main pinned preview stays as-is.) */
-      --brochure-thumb-scale: 0.6;
+      --line:                #dcdad6;
+      --line-2:              #c8c4be;
 
-      /* Detect panel — per-class score grid cell size (ported from L1).
-         0.7 = 30% smaller cells than L1's defaults. */
+      --accent:              #c8682e;  /* warm amber-orange */
+
+      --shadow-sm:           0 1px 3px rgba(28,32,40,.05);
+      --shadow-md:           0 6px 22px rgba(28,32,40,.09);
+
+      /* Channel-stack brochure — auto-fill grid of thumbs (functional knobs). */
+      --brochure-thumb-min:  52px;
+      --brochure-thumb-scale:0.95;
+
+      /* Detect panel — per-class score grid cell size. */
       --scale-grid-cell-scale: 0.7;
     }
 
-    /* Dark theme — applied with data-theme="dark" on <html>. Designed so the
-       SVG node fills (light pastels from arch-v2) still pop against the
-       darker canvas; the chrome and panels go dark. */
+    /* Dark theme — applied via data-theme="dark" on <html>. Deep navy-slate
+       canvas, mid-tone panels; designed so the colored-glass block fills from
+       arch-v2's dark palette read against the canvas rather than into it. */
     html[data-theme="dark"] {
-      --bg: #0f172a;
-      --bg-tint: #1e293b;
-      --ink: #f1f5f9;
-      --ink-2: #cbd5e1;
-      --ink-3: #94a3b8;
-      --ink-4: #64748b;
-      --line: #334155;
-      --line-2: #475569;
-      --panel: #1e293b;
-      --graph-bg: #0b1220;
-      --code-bg: #0b1220;
-      --shadow-md: 0 8px 24px rgba(0,0,0,.45);
+      --bg:                  #111822;
+      --bg-tint:             #1a2432;
+      --panel:               #172030;
+      --graph-bg:            #0c1118;
+      --code-bg:             #0c1118;
+
+      --ink:                 #e2e8f2;
+      --ink-2:               #9eafc0;
+      --ink-3:               #6a7e92;
+      --ink-4:               #3e4e60;
+
+      --line:                #28384c;
+      --line-2:              #384e64;
+
+      --accent:              #e07840;  /* brighter on dark bg */
+
+      --shadow-md:           0 8px 28px rgba(0,0,0,.55);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { height: 100%; }
@@ -273,10 +278,15 @@
     .meta-row .meta-v.mono { font-family: 'IBM Plex Mono', monospace; }
 
     .brochure-grid {
-      display: grid; grid-template-columns: repeat(4, 1fr);
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(calc(var(--brochure-thumb-min) * var(--brochure-thumb-scale)), 1fr));
       gap: calc(5px * var(--brochure-thumb-scale));
-      width: calc(100% * var(--brochure-thumb-scale));
-      align-content: start;
+      flex: 1; align-content: start;
+    }
+    /* Hard cap each thumb's own width so a wide panel doesn't grow them past
+       the user-selected min. Without this, a small K stretches each tile. */
+    .brochure-thumb {
+      max-width: calc(var(--brochure-thumb-min) * var(--brochure-thumb-scale) * 1.4);
     }
     .brochure-thumb {
       position: relative; padding: 0; background: var(--panel);
@@ -292,7 +302,7 @@
     }
     .brochure-thumb.pinned {
       border-color: var(--accent);
-      box-shadow: 0 0 0 2px rgba(251,146,60,.22);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
     }
     .thumb-idx {
       position: absolute; bottom: 2px; right: 3px;
@@ -432,7 +442,7 @@
     }
     .scale-grid-cell.is-peak {
       border-color: var(--accent);
-      box-shadow: 0 0 0 1px rgba(251,146,60,.35);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
     }
     .scale-grid-cell.faint { opacity: 0.55; }
     .scale-grid-cell img {
@@ -538,6 +548,42 @@
       width: 32px; height: 24px; padding: 0;
       border: 1px solid var(--line); border-radius: 4px;
       cursor: pointer; background: transparent;
+    }
+    .settings-palette-row {
+      display: grid;
+      grid-template-columns: 70px repeat(3, 1fr);
+      gap: 8px; align-items: center;
+      padding: 4px 0;
+      font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .settings-palette-type {
+      color: var(--ink); font-weight: 600;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .settings-palette-slot {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+    }
+    .settings-palette-slot input[type="color"] {
+      width: 100%; height: 22px; padding: 0;
+      border: 1px solid var(--line); border-radius: 4px; cursor: pointer;
+      background: transparent;
+    }
+    .settings-palette-slot .slot-label {
+      font-size: 9px; color: var(--ink-4); letter-spacing: 0.04em;
+    }
+
+    /* Top-K control above the channel stack */
+    .topk-control {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--ink-3);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .topk-control input[type="number"] {
+      width: 52px; padding: 2px 6px; font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      border: 1px solid var(--line); border-radius: 4px;
+      background: var(--panel); color: var(--ink); text-align: right;
     }
   </style>
 </head>

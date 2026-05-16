@@ -1,0 +1,1036 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>yolovex v2 — Design System Spec</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --page: #fafaf8;
+  --section: #f3f2ef;
+  --code-bg: #eeecea;
+  --border: #dcdad6;
+  --ink: #1c2028;
+  --ink-2: #4c5668;
+  --ink-3: #78889a;
+  --ink-4: #a8b4c0;
+  --accent: #c8682e;
+}
+html, body {
+  background: var(--page); color: var(--ink);
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 15px; line-height: 1.65;
+}
+.mono { font-family: 'IBM Plex Mono', monospace; }
+.wrap { max-width: 940px; margin: 0 auto; padding: 0 44px 100px; }
+
+h1 { font-size: 32px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.15; }
+h2 { font-size: 19px; font-weight: 600; letter-spacing: -0.01em; margin-bottom: 20px; }
+h3 { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); margin-bottom: 12px; }
+p { color: var(--ink-2); font-size: 14px; margin-bottom: 10px; text-wrap: pretty; }
+p:last-child { margin-bottom: 0; }
+code {
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+  background: var(--code-bg); padding: 1px 5px; border-radius: 3px; color: var(--ink);
+}
+
+/* ── Page structure ── */
+.page-header { padding: 56px 0 48px; border-bottom: 1px solid var(--border); margin-bottom: 60px; }
+.page-header .sub { color: var(--ink-2); font-size: 16px; max-width: 600px; margin-top: 10px; }
+.page-header .chips { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 22px; }
+.chip {
+  padding: 4px 12px; border-radius: 100px;
+  border: 1px solid var(--border); background: var(--section);
+  font-size: 12px; font-family: 'IBM Plex Mono', monospace; color: var(--ink-3);
+}
+
+spec-section { display: block; margin-bottom: 64px; padding-bottom: 60px; border-bottom: 1px solid var(--border); }
+spec-section:last-child { border-bottom: none; }
+.section-intro { color: var(--ink-2); font-size: 14px; margin-bottom: 28px; max-width: 640px; text-wrap: pretty; }
+
+/* ── Principles ── */
+.principles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.principle { padding: 20px; background: var(--section); border: 1px solid var(--border); border-radius: 10px; }
+.principle-n { font-size: 10px; font-family: 'IBM Plex Mono', monospace; color: var(--ink-4); margin-bottom: 7px; }
+.principle h4 { font-size: 14px; font-weight: 600; color: var(--ink); margin-bottom: 6px; }
+.principle p { font-size: 13px; }
+
+/* ── Token table ── */
+.token-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.token-block { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.token-head {
+  padding: 9px 16px; font-size: 11px; font-weight: 600; letter-spacing: 0.07em;
+  text-transform: uppercase; border-bottom: 1px solid var(--border);
+}
+.token-head.lm { background: #f0efec; color: #4c5668; }
+.token-head.dm { background: #111822; color: #6a8aaa; }
+.token-row {
+  display: flex; align-items: center; gap: 10px; padding: 5px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px; font-family: 'IBM Plex Mono', monospace;
+}
+.token-row:last-child { border-bottom: none; }
+.tswatch { width: 22px; height: 22px; border-radius: 4px; flex-shrink: 0; border: 1px solid rgba(0,0,0,.08); }
+.tname { flex: 1; color: var(--ink); }
+.tval { color: var(--ink-3); font-size: 11px; }
+
+/* ── Palette toggle ── */
+.palette-tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+.ptab {
+  padding: 5px 14px; font-size: 13px; font-weight: 500; font-family: inherit;
+  border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+  background: var(--section); color: var(--ink-2);
+}
+.ptab.active { background: var(--ink); color: var(--page); border-color: var(--ink); }
+
+/* ── Type palette grid ── */
+.type-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+.type-card { display: flex; flex-direction: column; gap: 8px; }
+.type-card-name { font-size: 10.5px; font-weight: 600; color: var(--ink-3); text-align: center; }
+.type-swatches { display: flex; flex-direction: column; gap: 5px; }
+.tsrow { display: flex; align-items: center; gap: 6px; font-size: 10px; font-family: 'IBM Plex Mono', monospace; color: var(--ink-4); }
+.sdot { width: 18px; height: 18px; border-radius: 3px; flex-shrink: 0; border: 1px solid rgba(0,0,0,.1); }
+
+/* ── Mini node SVG demo canvas ── */
+.demo-canvas {
+  background: #f5f4f0; border-radius: 10px; padding: 28px 24px;
+  border: 1px solid var(--border); overflow-x: auto;
+}
+.demo-canvas.dk { background: #0c1118; border-color: #28384c; }
+
+/* ── Role / accent chips ── */
+.role-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.role-chip {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 8px;
+  background: var(--section); border: 1px solid var(--border);
+}
+.rdot { width: 24px; height: 24px; border-radius: 5px; flex-shrink: 0; }
+.rname { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.rval { font-size: 11px; font-family: 'IBM Plex Mono', monospace; color: var(--ink-3); }
+
+/* ── Sub-kind palette ── */
+.sk-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.sk-card { border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+.sk-swatch { height: 44px; display: flex; align-items: center; justify-content: center; }
+.sk-swatch span { font-size: 10px; font-weight: 600; font-family: 'IBM Plex Mono', monospace; }
+.sk-meta { padding: 7px 9px; background: var(--section); border-top: 1px solid var(--border); }
+.sk-name { font-size: 11px; font-weight: 600; color: var(--ink); }
+.sk-vals { font-size: 9.5px; font-family: 'IBM Plex Mono', monospace; color: var(--ink-3); margin-top: 2px; line-height: 1.5; }
+
+/* ── State guide ── */
+.state-row { display: flex; gap: 28px; align-items: flex-start; }
+.state-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.state-tag { font-size: 12px; font-weight: 600; color: var(--ink); }
+.state-desc { font-size: 12px; color: var(--ink-3); text-align: center; max-width: 130px; line-height: 1.4; }
+
+/* ── Two-col nested demo ── */
+.nest-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.nest-legend { margin-top: 16px; display: flex; flex-direction: column; gap: 8px; }
+.nl-row { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink-2); }
+.nl-swatch { width: 28px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+/* ── Code delivery ── */
+.code-files { display: flex; flex-direction: column; gap: 12px; }
+details.cf { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+details.cf summary {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 18px; cursor: pointer; list-style: none;
+  background: var(--section);
+  font-size: 13px; font-family: 'IBM Plex Mono', monospace; font-weight: 500;
+  color: var(--ink); user-select: none;
+}
+details.cf summary::-webkit-details-marker { display: none; }
+details.cf summary .arr { color: var(--ink-3); font-size: 16px; transition: transform 120ms; display: inline-block; }
+details[open].cf summary .arr { transform: rotate(90deg); }
+details.cf summary:hover { background: #e8e5e0; }
+.cn { padding: 12px 18px; background: #fef9f5; border-bottom: 1px solid #f0ddd0; font-size: 13px; color: #7a3c18; }
+pre.cb {
+  background: #17181a; padding: 22px; overflow-x: auto;
+  font-size: 12.5px; font-family: 'IBM Plex Mono', monospace;
+  color: #c8d0dc; line-height: 1.8; tab-size: 2;
+  border-top: 1px solid var(--border); white-space: pre;
+}
+.cm  { color: #586470; }
+.kw  { color: #9b6cd8; }
+.str { color: #5eb87a; }
+.str2 { color: #d4846a; }
+.prop { color: #78b0e0; }
+.num { color: #e8b86a; }
+.pnc { color: #586470; }
+.cssp { color: #c897e8; }
+.cssv { color: #5eb87a; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<!-- ════════════════════════════════════════════════════════════
+     HEADER
+══════════════════════════════════════════════════════════════ -->
+<header class="page-header">
+  <h1>yolovex v2 — design system</h1>
+  <p class="sub">Visual redesign spec for the YOLO26n architecture explainer. Covers both light and dark themes end-to-end across all five source files.</p>
+  <div class="chips">
+    <span class="chip">yolovexv2.html</span>
+    <span class="chip">arch-v2.jsx</span>
+    <span class="chip">expand-v2.jsx</span>
+    <span class="chip">graph-v2.jsx</span>
+    <span class="chip">app-v2.jsx</span>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════════════════════════
+     PRINCIPLES
+══════════════════════════════════════════════════════════════ -->
+<spec-section>
+  <h2>Design principles</h2>
+  <div class="principles">
+    <div class="principle">
+      <div class="principle-n">01</div>
+      <h4>Presence without noise</h4>
+      <p>Blocks should feel solid and legible at the graph's resting zoom, not washed out in light mode or garish in dark. Target fill lightness: ~88% in light, ~28–36% in dark — enough color to read the type, not enough to compete with content.</p>
+    </div>
+    <div class="principle">
+      <div class="principle-n">02</div>
+      <h4>Three distinct interaction states</h4>
+      <p>Hover, selected, and playing are currently visually collapsed. New rule: hover → heavier type-colored stroke only; selected → accent ring + ambient glow, no lift; playing → accent ring + full beacon glow + lift. Each state occupies its own visual register.</p>
+    </div>
+    <div class="principle">
+      <div class="principle-n">03</div>
+      <h4>Depth cues from neutral to type</h4>
+      <p>The outermost expanded container inherits the block's type color (dashed). Inner container levels 1 → 2 → 3 step through a neutral-cool gradient, progressively darker and denser dash — signaling "you are deeper" without fighting the type palette.</p>
+    </div>
+  </div>
+</spec-section>
+
+<!-- ════════════════════════════════════════════════════════════
+     SURFACE TOKENS
+══════════════════════════════════════════════════════════════ -->
+<spec-section>
+  <h2>Surface tokens — <code>yolovexv2.html</code></h2>
+  <p class="section-intro">The page, panel, graph canvas, and text ramp. Light uses a warm near-white ground; dark uses deep navy-slate (not pure black, not indigo). One accent color, calibrated per theme.</p>
+
+  <div class="token-pair">
+    <!-- LIGHT -->
+    <div class="token-block">
+      <div class="token-head lm">Light  ·  :root</div>
+      <div class="token-row"><span class="tswatch" style="background:#fafaf8"></span><span class="tname">--bg</span><span class="tval">#fafaf8</span></div>
+      <div class="token-row"><span class="tswatch" style="background:#f3f2ef"></span><span class="tname">--bg-tint</span><span class="tval">#f3f2ef</span></div>
+      <div class="token-row"><span class="tswatch" style="background:#ffffff"></span><span class="tname">--panel</span><span class="tval">#ffffff</span></div>
+      <div class="token-row"><span class="tswatch" style="background:#f5f4f0"></span><span class="tname">--graph-bg</span><span class="tval">#f5f4f0</span></div>
+      <div class="token-row"><span class="tswatch" style="background:#eeecea"></span><span class="tname">--code-bg</span><span class="tval">#eeecea</span></div>
+      <div class="token-row"><span class="tswatch" style="background:#1c2028"></span><span class="tname">--ink</span><span class="tval">#1c2028</span></div>
+      <div class="token-row"><span class="tswatch" style="background:#4c5668"></span><span class="tname">--ink-2</span><span class="tval">#4c5668</span></div>
+      <div class="token-row"><span class="tswatch" style="background:#78889a"></span><span class="tname">--ink-3</span><span class="tval">#78889a</span></div>
+      <div class="token-row"><span class="tswatch" style="background:#a8b4c0"></span><span class="tname">--ink-4</span><span class="tval">#a8b4c0</span></div>
+      <div class="token-row"><span class="tswatch" style="background:#dcdad6"></span><span class="tname">--line</span><span class="tval">#dcdad6</span></div>
+      <div class="token-row"><span class="tswatch" style="background:#c8c4be"></span><span class="tname">--line-2</span><span class="tval">#c8c4be</span></div>
+      <div class="token-row"><span class="tswatch" style="background:#c8682e"></span><span class="tname">--accent</span><span class="tval">#c8682e</span></div>
+      <div class="token-row"><span class="tswatch" style="background:transparent; border:1px dashed #ccc"></span><span class="tname">--shadow-sm</span><span class="tval">0 1px 3px rgba(28,32,40,.05)</span></div>
+      <div class="token-row"><span class="tswatch" style="background:transparent; border:1px dashed #ccc"></span><span class="tname">--shadow-md</span><span class="tval">0 6px 22px rgba(28,32,40,.09)</span></div>
+    </div>
+    <!-- DARK -->
+    <div class="token-block" style="background:#111822">
+      <div class="token-head dm">Dark  ·  html[data-theme="dark"]</div>
+      <div class="token-row" style="border-color:#28384c"><span class="tswatch" style="background:#111822"></span><span class="tname" style="color:#9eafc0">--bg</span><span class="tval">#111822</span></div>
+      <div class="token-row" style="border-color:#28384c"><span class="tswatch" style="background:#1a2432"></span><span class="tname" style="color:#9eafc0">--bg-tint</span><span class="tval">#1a2432</span></div>
+      <div class="token-row" style="border-color:#28384c"><span class="tswatch" style="background:#172030"></span><span class="tname" style="color:#9eafc0">--panel</span><span class="tval">#172030</span></div>
+      <div class="token-row" style="border-color:#28384c"><span class="tswatch" style="background:#0c1118"></span><span class="tname" style="color:#9eafc0">--graph-bg</span><span class="tval">#0c1118</span></div>
+      <div class="token-row" style="border-color:#28384c"><span class="tswatch" style="background:#0c1118"></span><span class="tname" style="color:#9eafc0">--code-bg</span><span class="tval">#0c1118</span></div>
+      <div class="token-row" style="border-color:#28384c"><span class="tswatch" style="background:#e2e8f2"></span><span class="tname" style="color:#9eafc0">--ink</span><span class="tval">#e2e8f2</span></div>
+      <div class="token-row" style="border-color:#28384c"><span class="tswatch" style="background:#9eafc0"></span><span class="tname" style="color:#9eafc0">--ink-2</span><span class="tval">#9eafc0</span></div>
+      <div class="token-row" style="border-color:#28384c"><span class="tswatch" style="background:#6a7e92"></span><span class="tname" style="color:#9eafc0">--ink-3</span><span class="tval">#6a7e92</span></div>
+      <div class="token-row" style="border-color:#28384c"><span class="tswatch" style="background:#3e4e60"></span><span class="tname" style="color:#9eafc0">--ink-4</span><span class="tval">#3e4e60</span></div>
+      <div class="token-row" style="border-color:#28384c"><span class="tswatch" style="background:#28384c"></span><span class="tname" style="color:#9eafc0">--line</span><span class="tval">#28384c</span></div>
+      <div class="token-row" style="border-color:#28384c"><span class="tswatch" style="background:#384e64"></span><span class="tname" style="color:#9eafc0">--line-2</span><span class="tval">#384e64</span></div>
+      <div class="token-row" style="border-color:#28384c"><span class="tswatch" style="background:#e07840"></span><span class="tname" style="color:#9eafc0">--accent</span><span class="tval">#e07840</span></div>
+      <div class="token-row" style="border-color:#28384c"><span class="tswatch" style="background:transparent;border:1px dashed #28384c"></span><span class="tname" style="color:#9eafc0">--shadow-md</span><span class="tval">0 8px 28px rgba(0,0,0,.55)</span></div>
+    </div>
+  </div>
+</spec-section>
+
+<!-- ════════════════════════════════════════════════════════════
+     BLOCK TYPE PALETTE
+══════════════════════════════════════════════════════════════ -->
+<spec-section>
+  <h2>Block type palette — <code>arch-v2.jsx · TYPE_PALETTES</code></h2>
+  <p class="section-intro">Seven types, each with a distinct hue family. Light uses higher-chroma pastels (~88% lightness) for presence without glare. Dark uses deep mid-tone fills (~28–36%) with bright borders — "colored glass in low light", not neon.</p>
+
+  <div class="palette-tabs">
+    <button class="ptab active" onclick="showPalette('light', this)">Light</button>
+    <button class="ptab" onclick="showPalette('dark', this)">Dark</button>
+  </div>
+
+  <!-- Light palette -->
+  <div id="pal-light">
+    <div class="demo-canvas" style="margin-bottom:20px">
+      <svg width="830" height="76" style="overflow:visible;display:block;max-width:100%">
+        <defs>
+          <filter id="h-lm" x="-40%" y="-40%" width="180%" height="180%"><feDropShadow dx="0" dy="3" stdDeviation="5" flood-opacity="0.13"/></filter>
+        </defs>
+        <!-- Conv -->
+        <g transform="translate(0,8)">
+          <rect width="112" height="56" rx="7" fill="#c4f0d8" stroke="#22864e" stroke-width="1"/>
+          <text x="10" y="18" font-size="10" fill="#103c22" font-family="IBM Plex Mono,monospace" opacity=".7">[0]</text>
+          <text x="32" y="18" font-size="12" font-weight="600" fill="#103c22" font-family="IBM Plex Sans,sans-serif">Conv</text>
+          <text x="10" y="38" font-size="9.5" fill="#103c22" font-family="IBM Plex Mono,monospace" opacity=".8">(1, 16, 320, 240)</text>
+        </g>
+        <!-- C3k2 -->
+        <g transform="translate(124,8)">
+          <rect width="112" height="56" rx="7" fill="#fdd4d8" stroke="#c43838" stroke-width="1"/>
+          <text x="10" y="18" font-size="10" fill="#5c0f14" font-family="IBM Plex Mono,monospace" opacity=".7">[2]</text>
+          <text x="32" y="18" font-size="12" font-weight="600" fill="#5c0f14" font-family="IBM Plex Sans,sans-serif">C3k2</text>
+          <text x="10" y="38" font-size="9.5" fill="#5c0f14" font-family="IBM Plex Mono,monospace" opacity=".8">(1, 64, 160, 120)</text>
+        </g>
+        <!-- Upsample -->
+        <g transform="translate(248,8)">
+          <rect width="112" height="56" rx="7" fill="#e8d4f8" stroke="#8840c8" stroke-width="1"/>
+          <text x="10" y="18" font-size="10" fill="#3a1060" font-family="IBM Plex Mono,monospace" opacity=".7">[11]</text>
+          <text x="34" y="18" font-size="11" font-weight="600" fill="#3a1060" font-family="IBM Plex Sans,sans-serif">Upsample</text>
+          <text x="10" y="38" font-size="9.5" fill="#3a1060" font-family="IBM Plex Mono,monospace" opacity=".8">(1, 256, 40, 30)</text>
+        </g>
+        <!-- Concat -->
+        <g transform="translate(372,8)">
+          <rect width="112" height="56" rx="7" fill="#d4daf8" stroke="#4058c8" stroke-width="1"/>
+          <text x="10" y="18" font-size="10" fill="#141c60" font-family="IBM Plex Mono,monospace" opacity=".7">[12]</text>
+          <text x="34" y="18" font-size="12" font-weight="600" fill="#141c60" font-family="IBM Plex Sans,sans-serif">Concat</text>
+          <text x="10" y="38" font-size="9.5" fill="#141c60" font-family="IBM Plex Mono,monospace" opacity=".8">(1, 384, 40, 30)</text>
+        </g>
+        <!-- SPPF -->
+        <g transform="translate(496,8)">
+          <rect width="112" height="56" rx="7" fill="#fdf0b4" stroke="#a87c18" stroke-width="1"/>
+          <text x="10" y="18" font-size="10" fill="#4a3408" font-family="IBM Plex Mono,monospace" opacity=".7">[9]</text>
+          <text x="30" y="18" font-size="12" font-weight="600" fill="#4a3408" font-family="IBM Plex Sans,sans-serif">SPPF</text>
+          <text x="10" y="38" font-size="9.5" fill="#4a3408" font-family="IBM Plex Mono,monospace" opacity=".8">(1, 256, 20, 15)</text>
+        </g>
+        <!-- C2PSA -->
+        <g transform="translate(620,8)" >
+          <rect width="112" height="56" rx="7" fill="#c8e4f8" stroke="#2868b8" stroke-width="1"/>
+          <text x="10" y="18" font-size="10" fill="#0c2c5a" font-family="IBM Plex Mono,monospace" opacity=".7">[10]</text>
+          <text x="34" y="18" font-size="12" font-weight="600" fill="#0c2c5a" font-family="IBM Plex Sans,sans-serif">C2PSA</text>
+          <text x="10" y="38" font-size="9.5" fill="#0c2c5a" font-family="IBM Plex Mono,monospace" opacity=".8">(1, 256, 20, 15)</text>
+        </g>
+        <!-- Detect — special: 3 sub-boxes -->
+        <g transform="translate(744,0)">
+          <text x="0" y="10" font-size="9" fill="#78889a" font-family="IBM Plex Mono,monospace">[23] Detect</text>
+          <rect x="0" y="14" width="86" height="20" rx="5" fill="#c4f0e8" stroke="#1a8870" stroke-width="1"/>
+          <text x="10" y="28" font-size="10" font-weight="600" fill="#083c30" font-family="IBM Plex Sans,sans-serif">P3</text>
+          <rect x="0" y="38" width="86" height="20" rx="5" fill="#c4f0e8" stroke="#1a8870" stroke-width="1"/>
+          <text x="10" y="52" font-size="10" font-weight="600" fill="#083c30" font-family="IBM Plex Sans,sans-serif">P4</text>
+          <rect x="0" y="62" width="86" height="20" rx="5" fill="#c4f0e8" stroke="#1a8870" stroke-width="1"/>
+          <text x="10" y="76" font-size="10" font-weight="600" fill="#083c30" font-family="IBM Plex Sans,sans-serif">P5</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="type-grid">
+      <div class="type-card">
+        <div class="type-card-name">Conv</div>
+        <div class="type-swatches">
+          <div class="tsrow"><span class="sdot" style="background:#c4f0d8;border-color:#22864e20"></span>#c4f0d8</div>
+          <div class="tsrow"><span class="sdot" style="background:#22864e"></span>#22864e</div>
+          <div class="tsrow"><span class="sdot" style="background:#103c22"></span>#103c22</div>
+        </div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">C3k2</div>
+        <div class="type-swatches">
+          <div class="tsrow"><span class="sdot" style="background:#fdd4d8"></span>#fdd4d8</div>
+          <div class="tsrow"><span class="sdot" style="background:#c43838"></span>#c43838</div>
+          <div class="tsrow"><span class="sdot" style="background:#5c0f14"></span>#5c0f14</div>
+        </div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">Upsample</div>
+        <div class="type-swatches">
+          <div class="tsrow"><span class="sdot" style="background:#e8d4f8"></span>#e8d4f8</div>
+          <div class="tsrow"><span class="sdot" style="background:#8840c8"></span>#8840c8</div>
+          <div class="tsrow"><span class="sdot" style="background:#3a1060"></span>#3a1060</div>
+        </div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">Concat</div>
+        <div class="type-swatches">
+          <div class="tsrow"><span class="sdot" style="background:#d4daf8"></span>#d4daf8</div>
+          <div class="tsrow"><span class="sdot" style="background:#4058c8"></span>#4058c8</div>
+          <div class="tsrow"><span class="sdot" style="background:#141c60"></span>#141c60</div>
+        </div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">SPPF</div>
+        <div class="type-swatches">
+          <div class="tsrow"><span class="sdot" style="background:#fdf0b4"></span>#fdf0b4</div>
+          <div class="tsrow"><span class="sdot" style="background:#a87c18"></span>#a87c18</div>
+          <div class="tsrow"><span class="sdot" style="background:#4a3408"></span>#4a3408</div>
+        </div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">C2PSA</div>
+        <div class="type-swatches">
+          <div class="tsrow"><span class="sdot" style="background:#c8e4f8"></span>#c8e4f8</div>
+          <div class="tsrow"><span class="sdot" style="background:#2868b8"></span>#2868b8</div>
+          <div class="tsrow"><span class="sdot" style="background:#0c2c5a"></span>#0c2c5a</div>
+        </div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">Detect</div>
+        <div class="type-swatches">
+          <div class="tsrow"><span class="sdot" style="background:#c4f0e8"></span>#c4f0e8</div>
+          <div class="tsrow"><span class="sdot" style="background:#1a8870"></span>#1a8870</div>
+          <div class="tsrow"><span class="sdot" style="background:#083c30"></span>#083c30</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Dark palette -->
+  <div id="pal-dark" style="display:none">
+    <div class="demo-canvas dk" style="margin-bottom:20px">
+      <svg width="830" height="76" style="overflow:visible;display:block;max-width:100%">
+        <g transform="translate(0,8)">
+          <rect width="112" height="56" rx="7" fill="#1d3e2c" stroke="#48b870" stroke-width="1.5"/>
+          <text x="10" y="18" font-size="10" fill="#c8f0d8" font-family="IBM Plex Mono,monospace" opacity=".6">[0]</text>
+          <text x="32" y="18" font-size="12" font-weight="600" fill="#c8f0d8" font-family="IBM Plex Sans,sans-serif">Conv</text>
+          <text x="10" y="38" font-size="9.5" fill="#c8f0d8" font-family="IBM Plex Mono,monospace" opacity=".7">(1, 16, 320, 240)</text>
+        </g>
+        <g transform="translate(124,8)">
+          <rect width="112" height="56" rx="7" fill="#3e1e26" stroke="#d86870" stroke-width="1.5"/>
+          <text x="10" y="18" font-size="10" fill="#f5d4d8" font-family="IBM Plex Mono,monospace" opacity=".6">[2]</text>
+          <text x="32" y="18" font-size="12" font-weight="600" fill="#f5d4d8" font-family="IBM Plex Sans,sans-serif">C3k2</text>
+          <text x="10" y="38" font-size="9.5" fill="#f5d4d8" font-family="IBM Plex Mono,monospace" opacity=".7">(1, 64, 160, 120)</text>
+        </g>
+        <g transform="translate(248,8)">
+          <rect width="112" height="56" rx="7" fill="#2c1e42" stroke="#a870d4" stroke-width="1.5"/>
+          <text x="10" y="18" font-size="10" fill="#e8d4f8" font-family="IBM Plex Mono,monospace" opacity=".6">[11]</text>
+          <text x="34" y="18" font-size="11" font-weight="600" fill="#e8d4f8" font-family="IBM Plex Sans,sans-serif">Upsample</text>
+          <text x="10" y="38" font-size="9.5" fill="#e8d4f8" font-family="IBM Plex Mono,monospace" opacity=".7">(1, 256, 40, 30)</text>
+        </g>
+        <g transform="translate(372,8)">
+          <rect width="112" height="56" rx="7" fill="#1e2244" stroke="#6068c8" stroke-width="1.5"/>
+          <text x="10" y="18" font-size="10" fill="#d4d8f8" font-family="IBM Plex Mono,monospace" opacity=".6">[12]</text>
+          <text x="34" y="18" font-size="12" font-weight="600" fill="#d4d8f8" font-family="IBM Plex Sans,sans-serif">Concat</text>
+          <text x="10" y="38" font-size="9.5" fill="#d4d8f8" font-family="IBM Plex Mono,monospace" opacity=".7">(1, 384, 40, 30)</text>
+        </g>
+        <g transform="translate(496,8)">
+          <rect width="112" height="56" rx="7" fill="#3a2c10" stroke="#c89428" stroke-width="1.5"/>
+          <text x="10" y="18" font-size="10" fill="#f5e8c0" font-family="IBM Plex Mono,monospace" opacity=".6">[9]</text>
+          <text x="30" y="18" font-size="12" font-weight="600" fill="#f5e8c0" font-family="IBM Plex Sans,sans-serif">SPPF</text>
+          <text x="10" y="38" font-size="9.5" fill="#f5e8c0" font-family="IBM Plex Mono,monospace" opacity=".7">(1, 256, 20, 15)</text>
+        </g>
+        <g transform="translate(620,8)">
+          <rect width="112" height="56" rx="7" fill="#102838" stroke="#3a98d8" stroke-width="1.5"/>
+          <text x="10" y="18" font-size="10" fill="#c4dff5" font-family="IBM Plex Mono,monospace" opacity=".6">[10]</text>
+          <text x="34" y="18" font-size="12" font-weight="600" fill="#c4dff5" font-family="IBM Plex Sans,sans-serif">C2PSA</text>
+          <text x="10" y="38" font-size="9.5" fill="#c4dff5" font-family="IBM Plex Mono,monospace" opacity=".7">(1, 256, 20, 15)</text>
+        </g>
+        <g transform="translate(744,0)">
+          <text x="0" y="10" font-size="9" fill="#6a7e92" font-family="IBM Plex Mono,monospace">[23] Detect</text>
+          <rect x="0" y="14" width="86" height="20" rx="5" fill="#102e28" stroke="#38a888" stroke-width="1.5"/>
+          <text x="10" y="28" font-size="10" font-weight="600" fill="#c0f0e4" font-family="IBM Plex Sans,sans-serif">P3</text>
+          <rect x="0" y="38" width="86" height="20" rx="5" fill="#102e28" stroke="#38a888" stroke-width="1.5"/>
+          <text x="10" y="52" font-size="10" font-weight="600" fill="#c0f0e4" font-family="IBM Plex Sans,sans-serif">P4</text>
+          <rect x="0" y="62" width="86" height="20" rx="5" fill="#102e28" stroke="#38a888" stroke-width="1.5"/>
+          <text x="10" y="76" font-size="10" font-weight="600" fill="#c0f0e4" font-family="IBM Plex Sans,sans-serif">P5</text>
+        </g>
+      </svg>
+    </div>
+
+    <div class="type-grid">
+      <div class="type-card">
+        <div class="type-card-name">Conv</div>
+        <div class="type-swatches">
+          <div class="tsrow"><span class="sdot" style="background:#1d3e2c"></span>#1d3e2c</div>
+          <div class="tsrow"><span class="sdot" style="background:#48b870"></span>#48b870</div>
+          <div class="tsrow"><span class="sdot" style="background:#c8f0d8"></span>#c8f0d8</div>
+        </div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">C3k2</div>
+        <div class="type-swatches">
+          <div class="tsrow"><span class="sdot" style="background:#3e1e26"></span>#3e1e26</div>
+          <div class="tsrow"><span class="sdot" style="background:#d86870"></span>#d86870</div>
+          <div class="tsrow"><span class="sdot" style="background:#f5d4d8"></span>#f5d4d8</div>
+        </div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">Upsample</div>
+        <div class="type-swatches">
+          <div class="tsrow"><span class="sdot" style="background:#2c1e42"></span>#2c1e42</div>
+          <div class="tsrow"><span class="sdot" style="background:#a870d4"></span>#a870d4</div>
+          <div class="tsrow"><span class="sdot" style="background:#e8d4f8"></span>#e8d4f8</div>
+        </div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">Concat</div>
+        <div class="type-swatches">
+          <div class="tsrow"><span class="sdot" style="background:#1e2244"></span>#1e2244</div>
+          <div class="tsrow"><span class="sdot" style="background:#6068c8"></span>#6068c8</div>
+          <div class="tsrow"><span class="sdot" style="background:#d4d8f8"></span>#d4d8f8</div>
+        </div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">SPPF</div>
+        <div class="type-swatches">
+          <div class="tsrow"><span class="sdot" style="background:#3a2c10"></span>#3a2c10</div>
+          <div class="tsrow"><span class="sdot" style="background:#c89428"></span>#c89428</div>
+          <div class="tsrow"><span class="sdot" style="background:#f5e8c0"></span>#f5e8c0</div>
+        </div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">C2PSA</div>
+        <div class="type-swatches">
+          <div class="tsrow"><span class="sdot" style="background:#102838"></span>#102838</div>
+          <div class="tsrow"><span class="sdot" style="background:#3a98d8"></span>#3a98d8</div>
+          <div class="tsrow"><span class="sdot" style="background:#c4dff5"></span>#c4dff5</div>
+        </div>
+      </div>
+      <div class="type-card">
+        <div class="type-card-name">Detect</div>
+        <div class="type-swatches">
+          <div class="tsrow"><span class="sdot" style="background:#102e28"></span>#102e28</div>
+          <div class="tsrow"><span class="sdot" style="background:#38a888"></span>#38a888</div>
+          <div class="tsrow"><span class="sdot" style="background:#c0f0e4"></span>#c0f0e4</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</spec-section>
+
+<!-- ════════════════════════════════════════════════════════════
+     ROLE + ACCENT
+══════════════════════════════════════════════════════════════ -->
+<spec-section>
+  <h2>Role colors &amp; accent — <code>arch-v2.jsx · ROLE_PALETTES / ACCENTS</code></h2>
+  <p class="section-intro">Role containers are structural annotations (dashed outlines, 0.55 opacity) not fills — so these colors should read at low weight. Backbone/Neck/Head use distinct hue families that don't collide with any type hue. One warm amber accent serves: skip edges, selected ring, playing glow, brochure pinned, is-peak highlight.</p>
+
+  <h3 style="margin-bottom:10px">Light mode</h3>
+  <div class="role-row" style="margin-bottom:24px">
+    <div class="role-chip"><span class="rdot" style="background:#1a7a50"></span><div><div class="rname">Backbone</div><div class="rval">#1a7a50</div></div></div>
+    <div class="role-chip"><span class="rdot" style="background:#3060b8"></span><div><div class="rname">Neck</div><div class="rval">#3060b8</div></div></div>
+    <div class="role-chip"><span class="rdot" style="background:#b83030"></span><div><div class="rname">Head</div><div class="rval">#b83030</div></div></div>
+    <div class="role-chip"><span class="rdot" style="background:#c8682e;border-radius:50%"></span><div><div class="rname">Accent</div><div class="rval">#c8682e</div></div></div>
+  </div>
+
+  <h3 style="margin-bottom:10px">Dark mode</h3>
+  <div class="role-row">
+    <div class="role-chip" style="background:#1a2432;border-color:#28384c"><span class="rdot" style="background:#3aaa64"></span><div><div class="rname" style="color:#e2e8f2">Backbone</div><div class="rval">#3aaa64</div></div></div>
+    <div class="role-chip" style="background:#1a2432;border-color:#28384c"><span class="rdot" style="background:#4878c8"></span><div><div class="rname" style="color:#e2e8f2">Neck</div><div class="rval">#4878c8</div></div></div>
+    <div class="role-chip" style="background:#1a2432;border-color:#28384c"><span class="rdot" style="background:#d04848"></span><div><div class="rname" style="color:#e2e8f2">Head</div><div class="rval">#d04848</div></div></div>
+    <div class="role-chip" style="background:#1a2432;border-color:#28384c"><span class="rdot" style="background:#e07840;border-radius:50%"></span><div><div class="rname" style="color:#e2e8f2">Accent</div><div class="rval">#e07840</div></div></div>
+  </div>
+</spec-section>
+
+<!-- ════════════════════════════════════════════════════════════
+     SUB-KIND PALETTE
+══════════════════════════════════════════════════════════════ -->
+<spec-section>
+  <h2>Sub-kind palette — <code>expand-v2.jsx · SUB_KIND_COLORS</code></h2>
+  <p class="section-intro">Colors for nodes inside expanded blocks. Currently a static light-only object — dark mode needs a parallel set. The light palette coordinates with block types (mod = same green family as Conv, op = warm orange, split = blue). Dark palette dims fills but keeps borders bright enough to read.</p>
+
+  <h3>Light</h3>
+  <div class="sk-grid" style="margin-bottom:20px">
+    <div class="sk-card">
+      <div class="sk-swatch" style="background:#eeede8;border-bottom:2px solid #8a8680"><span style="color:#3a3630">io</span></div>
+      <div class="sk-meta"><div class="sk-name">io</div><div class="sk-vals">fill #eeede8<br>border #8a8680<br>text #3a3630</div></div>
+    </div>
+    <div class="sk-card">
+      <div class="sk-swatch" style="background:#d8f0e4;border-bottom:2px solid #2a9450"><span style="color:#123c22">mod</span></div>
+      <div class="sk-meta"><div class="sk-name">mod / module</div><div class="sk-vals">fill #d8f0e4<br>border #2a9450<br>text #123c22</div></div>
+    </div>
+    <div class="sk-card">
+      <div class="sk-swatch" style="background:#feeee0;border-bottom:2px solid #c86838"><span style="color:#5a2008">op</span></div>
+      <div class="sk-meta"><div class="sk-name">op</div><div class="sk-vals">fill #feeee0<br>border #c86838<br>text #5a2008</div></div>
+    </div>
+    <div class="sk-card">
+      <div class="sk-swatch" style="background:#fef6c8;border-bottom:2px solid #b08814"><span style="color:#4c3800">cat</span></div>
+      <div class="sk-meta"><div class="sk-name">cat</div><div class="sk-vals">fill #fef6c8<br>border #b08814<br>text #4c3800</div></div>
+    </div>
+    <div class="sk-card">
+      <div class="sk-swatch" style="background:#d8e8fc;border-bottom:2px solid #4070c8"><span style="color:#0c2658">split</span></div>
+      <div class="sk-meta"><div class="sk-name">split</div><div class="sk-vals">fill #d8e8fc<br>border #4070c8<br>text #0c2658</div></div>
+    </div>
+    <div class="sk-card">
+      <div class="sk-swatch" style="background:#fef3c7;border-bottom:2px solid #f59e0b;display:flex;align-items:center;justify-content:center">
+        <svg width="36" height="36"><circle cx="18" cy="18" r="16" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/><text x="18" y="23" font-size="16" font-weight="700" fill="#78350f" text-anchor="middle">+</text></svg>
+      </div>
+      <div class="sk-meta"><div class="sk-name">arith (circle)</div><div class="sk-vals">fill #fef3c7<br>border #f59e0b<br>text #78350f</div></div>
+    </div>
+  </div>
+
+  <h3>Dark</h3>
+  <div class="sk-grid">
+    <div class="sk-card" style="background:#111822;border-color:#28384c">
+      <div class="sk-swatch" style="background:#252a34;border-bottom:2px solid #485060"><span style="color:#98a4b0">io</span></div>
+      <div class="sk-meta" style="background:#1a2432;border-color:#28384c"><div class="sk-name" style="color:#e2e8f2">io</div><div class="sk-vals">fill #252a34<br>border #485060<br>text #98a4b0</div></div>
+    </div>
+    <div class="sk-card" style="background:#111822;border-color:#28384c">
+      <div class="sk-swatch" style="background:#1a2e24;border-bottom:2px solid #34784a"><span style="color:#90d4a8">mod</span></div>
+      <div class="sk-meta" style="background:#1a2432;border-color:#28384c"><div class="sk-name" style="color:#e2e8f2">mod / module</div><div class="sk-vals">fill #1a2e24<br>border #34784a<br>text #90d4a8</div></div>
+    </div>
+    <div class="sk-card" style="background:#111822;border-color:#28384c">
+      <div class="sk-swatch" style="background:#2c1e14;border-bottom:2px solid #b86030"><span style="color:#f0b888">op</span></div>
+      <div class="sk-meta" style="background:#1a2432;border-color:#28384c"><div class="sk-name" style="color:#e2e8f2">op</div><div class="sk-vals">fill #2c1e14<br>border #b86030<br>text #f0b888</div></div>
+    </div>
+    <div class="sk-card" style="background:#111822;border-color:#28384c">
+      <div class="sk-swatch" style="background:#2a2410;border-bottom:2px solid #a07c1c"><span style="color:#f0d890">cat</span></div>
+      <div class="sk-meta" style="background:#1a2432;border-color:#28384c"><div class="sk-name" style="color:#e2e8f2">cat</div><div class="sk-vals">fill #2a2410<br>border #a07c1c<br>text #f0d890</div></div>
+    </div>
+    <div class="sk-card" style="background:#111822;border-color:#28384c">
+      <div class="sk-swatch" style="background:#16203e;border-bottom:2px solid #3860a8"><span style="color:#88b0e0">split</span></div>
+      <div class="sk-meta" style="background:#1a2432;border-color:#28384c"><div class="sk-name" style="color:#e2e8f2">split</div><div class="sk-vals">fill #16203e<br>border #3860a8<br>text #88b0e0</div></div>
+    </div>
+    <div class="sk-card" style="background:#111822;border-color:#28384c">
+      <div class="sk-swatch" style="background:#2a2010;border-bottom:2px solid #c89428;display:flex;align-items:center;justify-content:center">
+        <svg width="36" height="36"><circle cx="18" cy="18" r="16" fill="#2a2010" stroke="#c89428" stroke-width="1.5"/><text x="18" y="23" font-size="16" font-weight="700" fill="#f5e8c0" text-anchor="middle">+</text></svg>
+      </div>
+      <div class="sk-meta" style="background:#1a2432;border-color:#28384c"><div class="sk-name" style="color:#e2e8f2">arith (circle)</div><div class="sk-vals">fill #2a2010<br>border #c89428<br>text #f5e8c0</div></div>
+    </div>
+  </div>
+</spec-section>
+
+<!-- ════════════════════════════════════════════════════════════
+     STATE VOCABULARY
+══════════════════════════════════════════════════════════════ -->
+<spec-section>
+  <h2>State vocabulary — <code>graph-v2.jsx</code></h2>
+  <p class="section-intro">Three states, three visual registers. Currently hover and selected share the orange glow — they need to be clearly separable at a glance.</p>
+
+  <div class="demo-canvas" style="margin-bottom:20px">
+    <svg width="680" height="130" style="display:block;max-width:100%;overflow:visible">
+      <defs>
+        <filter id="sf-hov" x="-40%" y="-40%" width="180%" height="180%">
+          <feDropShadow dx="0" dy="3" stdDeviation="5" flood-opacity="0.13"/>
+        </filter>
+        <filter id="sf-sel" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="2" stdDeviation="7" flood-color="#c8682e" flood-opacity="0.28"/>
+        </filter>
+        <filter id="sf-play" x="-50%" y="-50%" width="200%" height="200%">
+          <feDropShadow dx="0" dy="0" stdDeviation="11" flood-color="#c8682e" flood-opacity="0.72"/>
+        </filter>
+      </defs>
+
+      <!-- Default -->
+      <g transform="translate(20,24)">
+        <rect width="130" height="60" rx="7" fill="#c4f0d8" stroke="#22864e" stroke-width="1"/>
+        <text x="10" y="20" font-size="10" fill="#103c22" font-family="IBM Plex Mono,monospace" opacity=".65">[4]</text>
+        <text x="30" y="20" font-size="13" font-weight="600" fill="#103c22" font-family="IBM Plex Sans,sans-serif">C3k2</text>
+        <text x="10" y="42" font-size="9.5" fill="#103c22" font-family="IBM Plex Mono,monospace" opacity=".75">(1, 128, 80, 60)</text>
+      </g>
+      <text x="85" y="112" font-size="12" font-weight="600" text-anchor="middle" fill="#1c2028">Default</text>
+      <text x="85" y="126" font-size="11" text-anchor="middle" fill="#78889a">1px type border</text>
+
+      <!-- Hovered -->
+      <g transform="translate(185,24)" filter="url(#sf-hov)">
+        <rect width="130" height="60" rx="7" fill="#c4f0d8" stroke="#22864e" stroke-width="2"/>
+        <text x="10" y="20" font-size="10" fill="#103c22" font-family="IBM Plex Mono,monospace" opacity=".65">[4]</text>
+        <text x="30" y="20" font-size="13" font-weight="600" fill="#103c22" font-family="IBM Plex Sans,sans-serif">C3k2</text>
+        <text x="10" y="42" font-size="9.5" fill="#103c22" font-family="IBM Plex Mono,monospace" opacity=".75">(1, 128, 80, 60)</text>
+      </g>
+      <text x="250" y="112" font-size="12" font-weight="600" text-anchor="middle" fill="#1c2028">Hovered</text>
+      <text x="250" y="126" font-size="11" text-anchor="middle" fill="#78889a">2px type border + shadow</text>
+
+      <!-- Selected -->
+      <g transform="translate(350,24)" filter="url(#sf-sel)">
+        <rect width="130" height="60" rx="7" fill="#c4f0d8" stroke="#c8682e" stroke-width="2.5"/>
+        <text x="10" y="20" font-size="10" fill="#103c22" font-family="IBM Plex Mono,monospace" opacity=".65">[4]</text>
+        <text x="30" y="20" font-size="13" font-weight="600" fill="#103c22" font-family="IBM Plex Sans,sans-serif">C3k2</text>
+        <text x="10" y="42" font-size="9.5" fill="#103c22" font-family="IBM Plex Mono,monospace" opacity=".75">(1, 128, 80, 60)</text>
+      </g>
+      <text x="415" y="112" font-size="12" font-weight="600" text-anchor="middle" fill="#1c2028">Selected</text>
+      <text x="415" y="126" font-size="11" text-anchor="middle" fill="#78889a">2.5px accent ring + warm glow</text>
+
+      <!-- Playing — lifted -->
+      <g transform="translate(513,14) scale(1.05)" style="transform-origin: 65px 30px">
+        <g filter="url(#sf-play)">
+          <rect width="130" height="60" rx="7" fill="#c4f0d8" stroke="#c8682e" stroke-width="3"/>
+          <text x="10" y="20" font-size="10" fill="#103c22" font-family="IBM Plex Mono,monospace" opacity=".65">[4]</text>
+          <text x="30" y="20" font-size="13" font-weight="600" fill="#103c22" font-family="IBM Plex Sans,sans-serif">C3k2</text>
+          <text x="10" y="42" font-size="9.5" fill="#103c22" font-family="IBM Plex Mono,monospace" opacity=".75">(1, 128, 80, 60)</text>
+        </g>
+      </g>
+      <text x="579" y="112" font-size="12" font-weight="600" text-anchor="middle" fill="#1c2028">Playing</text>
+      <text x="579" y="126" font-size="11" text-anchor="middle" fill="#78889a">3px accent + beacon glow + lift</text>
+    </svg>
+  </div>
+
+  <h3>SVG filter defs (replace existing #node-shadow and #node-glow)</h3>
+  <div style="background:#17181a;border-radius:8px;overflow:hidden;border:1px solid var(--border)">
+    <pre class="cb" style="margin:0"><span class="cm">/* Three distinct filters — rename all references: node-glow → node-playing */</span>
+<span class="pnc">&lt;</span><span class="str">filter</span> <span class="prop">id</span><span class="pnc">="</span><span class="str2">node-hover</span><span class="pnc">"</span> <span class="prop">x</span><span class="pnc">="</span><span class="num">-40%</span><span class="pnc">"</span> <span class="prop">y</span><span class="pnc">="</span><span class="num">-40%</span><span class="pnc">"</span> <span class="prop">width</span><span class="pnc">="</span><span class="num">180%</span><span class="pnc">"</span> <span class="prop">height</span><span class="pnc">="</span><span class="num">180%</span><span class="pnc">"&gt;</span>
+  <span class="pnc">&lt;</span><span class="str">feDropShadow</span> <span class="prop">dx</span><span class="pnc">="0"</span> <span class="prop">dy</span><span class="pnc">="3"</span> <span class="prop">stdDeviation</span><span class="pnc">="5"</span> <span class="prop">floodOpacity</span><span class="pnc">="0.13"</span> <span class="pnc">/&gt;</span>
+<span class="pnc">&lt;/</span><span class="str">filter</span><span class="pnc">&gt;</span>
+<span class="pnc">&lt;</span><span class="str">filter</span> <span class="prop">id</span><span class="pnc">="</span><span class="str2">node-selected</span><span class="pnc">"</span> <span class="prop">x</span><span class="pnc">="</span><span class="num">-50%</span><span class="pnc">"</span> <span class="prop">y</span><span class="pnc">="</span><span class="num">-50%</span><span class="pnc">"</span> <span class="prop">width</span><span class="pnc">="</span><span class="num">200%</span><span class="pnc">"</span> <span class="prop">height</span><span class="pnc">="</span><span class="num">200%</span><span class="pnc">"&gt;</span>
+  <span class="pnc">&lt;</span><span class="str">feDropShadow</span> <span class="prop">dx</span><span class="pnc">="0"</span> <span class="prop">dy</span><span class="pnc">="2"</span> <span class="prop">stdDeviation</span><span class="pnc">="7"</span> <span class="prop">floodColor</span><span class="pnc">={</span><span class="str">ACCENT</span><span class="pnc">}</span> <span class="prop">floodOpacity</span><span class="pnc">="0.28"</span> <span class="pnc">/&gt;</span>
+<span class="pnc">&lt;/</span><span class="str">filter</span><span class="pnc">&gt;</span>
+<span class="pnc">&lt;</span><span class="str">filter</span> <span class="prop">id</span><span class="pnc">="</span><span class="str2">node-playing</span><span class="pnc">"</span> <span class="prop">x</span><span class="pnc">="</span><span class="num">-50%</span><span class="pnc">"</span> <span class="prop">y</span><span class="pnc">="</span><span class="num">-50%</span><span class="pnc">"</span> <span class="prop">width</span><span class="pnc">="</span><span class="num">200%</span><span class="pnc">"</span> <span class="prop">height</span><span class="pnc">="</span><span class="num">200%</span><span class="pnc">"&gt;</span>
+  <span class="pnc">&lt;</span><span class="str">feDropShadow</span> <span class="prop">dx</span><span class="pnc">="0"</span> <span class="prop">dy</span><span class="pnc">="0"</span> <span class="prop">stdDeviation</span><span class="pnc">="11"</span> <span class="prop">floodColor</span><span class="pnc">={</span><span class="str">ACCENT</span><span class="pnc">}</span> <span class="prop">floodOpacity</span><span class="pnc">="0.72"</span> <span class="pnc">/&gt;</span>
+<span class="pnc">&lt;/</span><span class="str">filter</span><span class="pnc">&gt;</span></pre>
+  </div>
+</spec-section>
+
+<!-- ════════════════════════════════════════════════════════════
+     NESTING DEPTH
+══════════════════════════════════════════════════════════════ -->
+<spec-section>
+  <h2>Nesting depth — <code>graph-v2.jsx · ExpandedNodeV2</code></h2>
+  <p class="section-intro">The outermost expanded container inherits the block's type-color (dashed border at type.border, 0.4 opacity). Inner containers step through a neutral-cool purple gradient, progressively darker fill and denser dash — signaling depth without competing with the type palette. Use <code>ic.depth</code> to index the style table.</p>
+
+  <div class="nest-pair">
+    <div>
+      <h3 style="margin-bottom:10px">Light</h3>
+      <div class="demo-canvas">
+        <svg width="320" height="260" style="display:block;max-width:100%;overflow:visible">
+          <!-- C3k2 outer container (type-colored dashed) -->
+          <rect x="8" y="8" width="300" height="240" rx="10"
+            fill="#fdd4d8" fill-opacity="0.20"
+            stroke="#c43838" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.8"/>
+          <text x="296" y="22" font-size="10.5" font-weight="600" fill="#c43838" font-family="IBM Plex Mono,monospace" text-anchor="end">[4] C3k2 ▴</text>
+
+          <!-- Inner container depth 1 -->
+          <rect x="24" y="32" width="268" height="200" rx="8"
+            fill="#f0eef8" fill-opacity="0.5"
+            stroke="#9080c8" stroke-width="1.5" stroke-dasharray="5 3"/>
+          <text x="284" y="46" font-size="10" font-weight="600" fill="#9080c8" font-family="IBM Plex Mono,monospace" text-anchor="end">m ▴</text>
+
+          <!-- Inner container depth 2 -->
+          <rect x="40" y="58" width="236" height="158" rx="7"
+            fill="#e8e4f2" fill-opacity="0.55"
+            stroke="#7060a8" stroke-width="1.2" stroke-dasharray="4 2"/>
+          <text x="268" y="71" font-size="10" font-weight="600" fill="#7060a8" font-family="IBM Plex Mono,monospace" text-anchor="end">m.0 ▴</text>
+
+          <!-- Inner container depth 3 -->
+          <rect x="56" y="84" width="204" height="118" rx="6"
+            fill="#e0dcea" fill-opacity="0.6"
+            stroke="#5040a0" stroke-width="1" stroke-dasharray="3 2"/>
+          <text x="252" y="97" font-size="9.5" font-weight="600" fill="#5040a0" font-family="IBM Plex Mono,monospace" text-anchor="end">Bottleneck ▴</text>
+
+          <!-- Leaf node inside -->
+          <rect x="90" y="108" width="136" height="52" rx="6" fill="#d8f0e4" stroke="#2a9450" stroke-width="1.5"/>
+          <text x="158" y="130" font-size="11" font-weight="600" fill="#123c22" text-anchor="middle" font-family="IBM Plex Sans,sans-serif">Conv2d</text>
+          <text x="158" y="148" font-size="9.5" fill="#123c22" opacity=".7" text-anchor="middle" font-family="IBM Plex Mono,monospace">1×64×80×60</text>
+        </svg>
+      </div>
+    </div>
+    <div>
+      <h3 style="margin-bottom:10px">Dark</h3>
+      <div class="demo-canvas dk">
+        <svg width="320" height="260" style="display:block;max-width:100%;overflow:visible">
+          <rect x="8" y="8" width="300" height="240" rx="10"
+            fill="#3e1e26" fill-opacity="0.25"
+            stroke="#d86870" stroke-width="1.5" stroke-dasharray="5 3" opacity="0.7"/>
+          <text x="296" y="22" font-size="10.5" font-weight="600" fill="#d86870" font-family="IBM Plex Mono,monospace" text-anchor="end">[4] C3k2 ▴</text>
+
+          <rect x="24" y="32" width="268" height="200" rx="8"
+            fill="#28244a" fill-opacity="0.5"
+            stroke="#7068c0" stroke-width="1.5" stroke-dasharray="5 3"/>
+          <text x="284" y="46" font-size="10" font-weight="600" fill="#7068c0" font-family="IBM Plex Mono,monospace" text-anchor="end">m ▴</text>
+
+          <rect x="40" y="58" width="236" height="158" rx="7"
+            fill="#201e3c" fill-opacity="0.6"
+            stroke="#5850a8" stroke-width="1.2" stroke-dasharray="4 2"/>
+          <text x="268" y="71" font-size="10" font-weight="600" fill="#5850a8" font-family="IBM Plex Mono,monospace" text-anchor="end">m.0 ▴</text>
+
+          <rect x="56" y="84" width="204" height="118" rx="6"
+            fill="#181830" fill-opacity="0.7"
+            stroke="#403880" stroke-width="1" stroke-dasharray="3 2"/>
+          <text x="252" y="97" font-size="9.5" font-weight="600" fill="#6050a0" font-family="IBM Plex Mono,monospace" text-anchor="end">Bottleneck ▴</text>
+
+          <rect x="90" y="108" width="136" height="52" rx="6" fill="#1a2e24" stroke="#34784a" stroke-width="1.5"/>
+          <text x="158" y="130" font-size="11" font-weight="600" fill="#90d4a8" text-anchor="middle" font-family="IBM Plex Sans,sans-serif">Conv2d</text>
+          <text x="158" y="148" font-size="9.5" fill="#90d4a8" opacity=".7" text-anchor="middle" font-family="IBM Plex Mono,monospace">1×64×80×60</text>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="nest-legend">
+    <div class="nl-row"><span class="nl-swatch" style="border:1.5px dashed #c43838;background:#fdd4d8;opacity:.5"></span>Expanded container — inherits block type fill/border (0.20–0.25 opacity fill, 1.5px dash "5 3")</div>
+    <div class="nl-row"><span class="nl-swatch" style="border:1.5px dashed #9080c8;background:#f0eef8;opacity:.7"></span>Inner depth 1 — light #f0eef8 / dark #28244a · stroke #9080c8 / #7068c0 · dash "5 3"</div>
+    <div class="nl-row"><span class="nl-swatch" style="border:1.2px dashed #7060a8;background:#e8e4f2;opacity:.7"></span>Inner depth 2 — light #e8e4f2 / dark #201e3c · stroke #7060a8 / #5850a8 · dash "4 2"</div>
+    <div class="nl-row"><span class="nl-swatch" style="border:1px dashed #5040a0;background:#e0dcea;opacity:.7"></span>Inner depth 3+ — light #e0dcea / dark #181830 · stroke #5040a0 / #403880 · dash "3 2"</div>
+  </div>
+</spec-section>
+
+<!-- ════════════════════════════════════════════════════════════
+     CODE DELIVERY
+══════════════════════════════════════════════════════════════ -->
+<spec-section>
+  <h2>Code — drop-in patches</h2>
+  <p class="section-intro">Ready to paste into each file. All changes are complete replacements of the named block — no diffs to reason about.</p>
+
+  <div class="code-files">
+
+    <!-- ── yolovexv2.html ── -->
+    <details class="cf">
+      <summary><span class="arr">›</span> yolovexv2.html — CSS :root + dark override</summary>
+      <pre class="cb"><span class="cm">/* Replace the existing :root and html[data-theme="dark"] blocks entirely. */</span>
+
+<span class="str">:root</span> <span class="pnc">{</span>
+  <span class="cssp">--bg</span><span class="pnc">:</span>                  <span class="cssv">#fafaf8</span><span class="pnc">;</span>
+  <span class="cssp">--bg-tint</span><span class="pnc">:</span>             <span class="cssv">#f3f2ef</span><span class="pnc">;</span>
+  <span class="cssp">--panel</span><span class="pnc">:</span>               <span class="cssv">#ffffff</span><span class="pnc">;</span>
+  <span class="cssp">--graph-bg</span><span class="pnc">:</span>            <span class="cssv">#f5f4f0</span><span class="pnc">;</span>
+  <span class="cssp">--code-bg</span><span class="pnc">:</span>             <span class="cssv">#eeecea</span><span class="pnc">;</span>
+
+  <span class="cssp">--ink</span><span class="pnc">:</span>                 <span class="cssv">#1c2028</span><span class="pnc">;</span>
+  <span class="cssp">--ink-2</span><span class="pnc">:</span>               <span class="cssv">#4c5668</span><span class="pnc">;</span>
+  <span class="cssp">--ink-3</span><span class="pnc">:</span>               <span class="cssv">#78889a</span><span class="pnc">;</span>
+  <span class="cssp">--ink-4</span><span class="pnc">:</span>               <span class="cssv">#a8b4c0</span><span class="pnc">;</span>
+
+  <span class="cssp">--line</span><span class="pnc">:</span>                <span class="cssv">#dcdad6</span><span class="pnc">;</span>
+  <span class="cssp">--line-2</span><span class="pnc">:</span>              <span class="cssv">#c8c4be</span><span class="pnc">;</span>
+
+  <span class="cssp">--accent</span><span class="pnc">:</span>              <span class="cssv">#c8682e</span><span class="pnc">;</span>  <span class="cm">/* warm amber-orange */</span>
+
+  <span class="cssp">--shadow-sm</span><span class="pnc">:</span>           <span class="cssv">0 1px 3px rgba(28,32,40,.05)</span><span class="pnc">;</span>
+  <span class="cssp">--shadow-md</span><span class="pnc">:</span>           <span class="cssv">0 6px 22px rgba(28,32,40,.09)</span><span class="pnc">;</span>
+
+  <span class="cssp">--brochure-thumb-min</span><span class="pnc">:</span>  <span class="cssv">52px</span><span class="pnc">;</span>
+  <span class="cssp">--brochure-thumb-scale</span><span class="pnc">:</span><span class="cssv">0.95</span><span class="pnc">;</span>
+  <span class="cssp">--scale-grid-cell-scale</span><span class="pnc">:</span><span class="cssv">0.7</span><span class="pnc">;</span>
+<span class="pnc">}</span>
+
+<span class="str">html[data-theme="dark"]</span> <span class="pnc">{</span>
+  <span class="cssp">--bg</span><span class="pnc">:</span>                  <span class="cssv">#111822</span><span class="pnc">;</span>
+  <span class="cssp">--bg-tint</span><span class="pnc">:</span>             <span class="cssv">#1a2432</span><span class="pnc">;</span>
+  <span class="cssp">--panel</span><span class="pnc">:</span>               <span class="cssv">#172030</span><span class="pnc">;</span>
+  <span class="cssp">--graph-bg</span><span class="pnc">:</span>            <span class="cssv">#0c1118</span><span class="pnc">;</span>
+  <span class="cssp">--code-bg</span><span class="pnc">:</span>             <span class="cssv">#0c1118</span><span class="pnc">;</span>
+
+  <span class="cssp">--ink</span><span class="pnc">:</span>                 <span class="cssv">#e2e8f2</span><span class="pnc">;</span>
+  <span class="cssp">--ink-2</span><span class="pnc">:</span>               <span class="cssv">#9eafc0</span><span class="pnc">;</span>
+  <span class="cssp">--ink-3</span><span class="pnc">:</span>               <span class="cssv">#6a7e92</span><span class="pnc">;</span>
+  <span class="cssp">--ink-4</span><span class="pnc">:</span>               <span class="cssv">#3e4e60</span><span class="pnc">;</span>
+
+  <span class="cssp">--line</span><span class="pnc">:</span>                <span class="cssv">#28384c</span><span class="pnc">;</span>
+  <span class="cssp">--line-2</span><span class="pnc">:</span>              <span class="cssv">#384e64</span><span class="pnc">;</span>
+
+  <span class="cssp">--accent</span><span class="pnc">:</span>              <span class="cssv">#e07840</span><span class="pnc">;</span>  <span class="cm">/* brighter on dark bg */</span>
+
+  <span class="cssp">--shadow-md</span><span class="pnc">:</span>           <span class="cssv">0 8px 28px rgba(0,0,0,.55)</span><span class="pnc">;</span>
+<span class="pnc">}</span>
+
+<span class="cm">/* Update the two hardcoded rgba accent colors in the rules below.
+   Find-and-replace: rgba(251,146,60,…) → match the new --accent per theme.
+   These appear in .brochure-thumb.pinned and .scale-grid-cell.is-peak: */</span>
+
+<span class="str">.brochure-thumb.pinned</span> <span class="pnc">{</span>
+  <span class="cssp">border-color</span><span class="pnc">:</span> <span class="cssv">var(--accent)</span><span class="pnc">;</span>
+  <span class="cssp">box-shadow</span><span class="pnc">:</span> <span class="cssv">0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent)</span><span class="pnc">;</span>
+<span class="pnc">}</span>
+
+<span class="str">.scale-grid-cell.is-peak</span> <span class="pnc">{</span>
+  <span class="cssp">border-color</span><span class="pnc">:</span> <span class="cssv">var(--accent)</span><span class="pnc">;</span>
+  <span class="cssp">box-shadow</span><span class="pnc">:</span> <span class="cssv">0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent)</span><span class="pnc">;</span>
+<span class="pnc">}</span></pre>
+    </details>
+
+    <!-- ── arch-v2.jsx ── -->
+    <details class="cf">
+      <summary><span class="arr">›</span> arch-v2.jsx — TYPE_PALETTES, ROLE_PALETTES, ACCENTS</summary>
+      <pre class="cb"><span class="cm">/* Replace the three palette objects entirely. */</span>
+
+<span class="kw">const</span> <span class="prop">TYPE_PALETTES</span> <span class="pnc">= {</span>
+  <span class="prop">light</span><span class="pnc">: {</span>
+    <span class="prop">Conv</span><span class="pnc">:     {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#c4f0d8'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#22864e'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#103c22'</span> <span class="pnc">},</span>
+    <span class="prop">C3k2</span><span class="pnc">:     {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#fdd4d8'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#c43838'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#5c0f14'</span> <span class="pnc">},</span>
+    <span class="prop">Upsample</span><span class="pnc">: {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#e8d4f8'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#8840c8'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#3a1060'</span> <span class="pnc">},</span>
+    <span class="prop">Concat</span><span class="pnc">:   {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#d4daf8'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#4058c8'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#141c60'</span> <span class="pnc">},</span>
+    <span class="prop">SPPF</span><span class="pnc">:     {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#fdf0b4'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#a87c18'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#4a3408'</span> <span class="pnc">},</span>
+    <span class="prop">C2PSA</span><span class="pnc">:    {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#c8e4f8'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#2868b8'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#0c2c5a'</span> <span class="pnc">},</span>
+    <span class="prop">Detect</span><span class="pnc">:   {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#c4f0e8'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#1a8870'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#083c30'</span> <span class="pnc">},</span>
+  <span class="pnc">},</span>
+  <span class="prop">dark</span><span class="pnc">: {</span>
+    <span class="prop">Conv</span><span class="pnc">:     {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#1d3e2c'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#48b870'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#c8f0d8'</span> <span class="pnc">},</span>
+    <span class="prop">C3k2</span><span class="pnc">:     {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#3e1e26'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#d86870'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#f5d4d8'</span> <span class="pnc">},</span>
+    <span class="prop">Upsample</span><span class="pnc">: {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#2c1e42'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#a870d4'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#e8d4f8'</span> <span class="pnc">},</span>
+    <span class="prop">Concat</span><span class="pnc">:   {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#1e2244'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#6068c8'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#d4d8f8'</span> <span class="pnc">},</span>
+    <span class="prop">SPPF</span><span class="pnc">:     {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#3a2c10'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#c89428'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#f5e8c0'</span> <span class="pnc">},</span>
+    <span class="prop">C2PSA</span><span class="pnc">:    {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#102838'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#3a98d8'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#c4dff5'</span> <span class="pnc">},</span>
+    <span class="prop">Detect</span><span class="pnc">:   {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#102e28'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#38a888'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#c0f0e4'</span> <span class="pnc">},</span>
+  <span class="pnc">},</span>
+<span class="pnc">};</span>
+
+<span class="kw">const</span> <span class="prop">ROLE_PALETTES</span> <span class="pnc">= {</span>
+  <span class="prop">light</span><span class="pnc">: {</span> <span class="prop">Backbone</span><span class="pnc">:</span> <span class="str">'#1a7a50'</span><span class="pnc">,</span> <span class="prop">Neck</span><span class="pnc">:</span> <span class="str">'#3060b8'</span><span class="pnc">,</span> <span class="prop">Head</span><span class="pnc">:</span> <span class="str">'#b83030'</span> <span class="pnc">},</span>
+  <span class="prop">dark</span><span class="pnc">:  {</span> <span class="prop">Backbone</span><span class="pnc">:</span> <span class="str">'#3aaa64'</span><span class="pnc">,</span> <span class="prop">Neck</span><span class="pnc">:</span> <span class="str">'#4878c8'</span><span class="pnc">,</span> <span class="prop">Head</span><span class="pnc">:</span> <span class="str">'#d04848'</span> <span class="pnc">},</span>
+<span class="pnc">};</span>
+
+<span class="kw">const</span> <span class="prop">ACCENTS</span> <span class="pnc">= {</span> <span class="prop">light</span><span class="pnc">:</span> <span class="str">'#c8682e'</span><span class="pnc">,</span> <span class="prop">dark</span><span class="pnc">:</span> <span class="str">'#e07840'</span> <span class="pnc">};</span></pre>
+    </details>
+
+    <!-- ── expand-v2.jsx ── -->
+    <details class="cf">
+      <summary><span class="arr">›</span> expand-v2.jsx — SUB_KIND_COLORS</summary>
+      <div class="cn">⚠️ SUB_KIND_COLORS is currently a static light-only object. To support both themes, replace it with two named constants and export both to <code>window.YVV2</code>. Then in <code>graph-v2.jsx · ExpandedNodeV2</code>, pick the set based on the <code>theme</code> prop (which needs threading through NodeV2 → ExpandedNodeV2).</div>
+      <pre class="cb"><span class="cm">/* Replace the existing static SUB_KIND_COLORS object with two sets. */</span>
+
+<span class="kw">const</span> <span class="prop">SUB_KIND_COLORS_LIGHT</span> <span class="pnc">= {</span>
+  <span class="prop">io</span><span class="pnc">:     {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#eeede8'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#8a8680'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#3a3630'</span> <span class="pnc">},</span>
+  <span class="prop">mod</span><span class="pnc">:    {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#d8f0e4'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#2a9450'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#123c22'</span> <span class="pnc">},</span>
+  <span class="prop">module</span><span class="pnc">: {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#d8f0e4'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#2a9450'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#123c22'</span> <span class="pnc">},</span>
+  <span class="prop">op</span><span class="pnc">:     {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#feeee0'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#c86838'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#5a2008'</span> <span class="pnc">},</span>
+  <span class="prop">cat</span><span class="pnc">:    {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#fef6c8'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#b08814'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#4c3800'</span> <span class="pnc">},</span>
+  <span class="prop">split</span><span class="pnc">:  {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#d8e8fc'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#4070c8'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#0c2658'</span> <span class="pnc">},</span>
+<span class="pnc">};</span>
+
+<span class="kw">const</span> <span class="prop">SUB_KIND_COLORS_DARK</span> <span class="pnc">= {</span>
+  <span class="prop">io</span><span class="pnc">:     {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#252a34'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#485060'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#98a4b0'</span> <span class="pnc">},</span>
+  <span class="prop">mod</span><span class="pnc">:    {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#1a2e24'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#34784a'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#90d4a8'</span> <span class="pnc">},</span>
+  <span class="prop">module</span><span class="pnc">: {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#1a2e24'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#34784a'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#90d4a8'</span> <span class="pnc">},</span>
+  <span class="prop">op</span><span class="pnc">:     {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#2c1e14'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#b86030'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#f0b888'</span> <span class="pnc">},</span>
+  <span class="prop">cat</span><span class="pnc">:    {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#2a2410'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#a07c1c'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#f0d890'</span> <span class="pnc">},</span>
+  <span class="prop">split</span><span class="pnc">:  {</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#16203e'</span><span class="pnc">,</span> <span class="prop">border</span><span class="pnc">:</span> <span class="str">'#3860a8'</span><span class="pnc">,</span> <span class="prop">text</span><span class="pnc">:</span> <span class="str">'#88b0e0'</span> <span class="pnc">},</span>
+<span class="pnc">};</span>
+
+<span class="cm">/* Keep a single SUB_KIND_COLORS alias pointing at the light set for
+   backward compat with any direct reference — graph-v2 will switch dynamically. */</span>
+<span class="kw">const</span> <span class="prop">SUB_KIND_COLORS</span> <span class="pnc">=</span> <span class="prop">SUB_KIND_COLORS_LIGHT</span><span class="pnc">;</span>
+
+<span class="cm">/* Export both sets to YVV2 so graph-v2 can pick the right one at render time. */</span>
+<span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">.</span><span class="prop">SUB_KIND_COLORS</span>       <span class="pnc">=</span> <span class="prop">SUB_KIND_COLORS_LIGHT</span><span class="pnc">;</span>
+<span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">.</span><span class="prop">SUB_KIND_COLORS_LIGHT</span> <span class="pnc">=</span> <span class="prop">SUB_KIND_COLORS_LIGHT</span><span class="pnc">;</span>
+<span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">.</span><span class="prop">SUB_KIND_COLORS_DARK</span>  <span class="pnc">=</span> <span class="prop">SUB_KIND_COLORS_DARK</span><span class="pnc">;</span>
+<span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">.</span><span class="prop">subFormatShape</span>        <span class="pnc">=</span> <span class="prop">subFormatShape</span><span class="pnc">;</span></pre>
+    </details>
+
+    <!-- ── graph-v2.jsx ── -->
+    <details class="cf">
+      <summary><span class="arr">›</span> graph-v2.jsx — SVG defs, NodeV2 states, inner containers, edge arrows, input node</summary>
+      <pre class="cb"><span class="cm">/* ── 1. Resolve SUB_KIND_COLORS by theme ──────────────────────────────── */</span>
+<span class="cm">/* In ExpandedNodeV2, replace: */</span>
+<span class="cm">/*   const { SUB_KIND_COLORS, subFormatShape } = window.YVV2;              */</span>
+<span class="cm">/* With (requires `theme` threaded through NodeV2 → ExpandedNodeV2 props): */</span>
+<span class="kw">const</span> <span class="prop">SKC</span> <span class="pnc">=</span> <span class="prop">theme</span> <span class="pnc">=== </span><span class="str">'dark'</span>
+  <span class="pnc">?</span> <span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">.</span><span class="prop">SUB_KIND_COLORS_DARK</span>
+  <span class="pnc">:</span> <span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">.</span><span class="prop">SUB_KIND_COLORS_LIGHT</span><span class="pnc">;</span>
+<span class="kw">const</span> <span class="pnc">{</span> <span class="prop">subFormatShape</span> <span class="pnc">} =</span> <span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">;</span>
+
+<span class="cm">/* ── 2. SVG &lt;defs&gt; — replace existing node-shadow and node-glow ──────── */</span>
+<span class="cm">/* Also thread EDGE_DEFAULT into arrow marker fills so they track the theme. */</span>
+<span class="pnc">&lt;</span><span class="str">marker</span> <span class="prop">id</span><span class="pnc">="arrow-gray"</span> <span class="prop">viewBox</span><span class="pnc">="0 0 10 10"</span> <span class="prop">refX</span><span class="pnc">="9"</span> <span class="prop">refY</span><span class="pnc">="5"</span> <span class="prop">markerWidth</span><span class="pnc">="7"</span> <span class="prop">markerHeight</span><span class="pnc">="7"</span> <span class="prop">orient</span><span class="pnc">="auto-start-reverse"&gt;</span>
+  <span class="pnc">&lt;</span><span class="str">path</span> <span class="prop">d</span><span class="pnc">="M 0 0 L 10 5 L 0 10 z"</span> <span class="prop">fill</span><span class="pnc">={</span><span class="prop">EDGE_DEFAULT</span><span class="pnc">}</span> <span class="pnc">/&gt;</span>
+<span class="pnc">&lt;/</span><span class="str">marker</span><span class="pnc">&gt;</span>
+<span class="pnc">&lt;</span><span class="str">marker</span> <span class="prop">id</span><span class="pnc">="arrow-accent"</span> <span class="prop">viewBox</span><span class="pnc">="0 0 10 10"</span> <span class="prop">refX</span><span class="pnc">="9"</span> <span class="prop">refY</span><span class="pnc">="5"</span> <span class="prop">markerWidth</span><span class="pnc">="7"</span> <span class="prop">markerHeight</span><span class="pnc">="7"</span> <span class="prop">orient</span><span class="pnc">="auto-start-reverse"&gt;</span>
+  <span class="pnc">&lt;</span><span class="str">path</span> <span class="prop">d</span><span class="pnc">="M 0 0 L 10 5 L 0 10 z"</span> <span class="prop">fill</span><span class="pnc">={</span><span class="prop">ACCENT</span><span class="pnc">}</span> <span class="pnc">/&gt;</span>
+<span class="pnc">&lt;/</span><span class="str">marker</span><span class="pnc">&gt;</span>
+<span class="pnc">&lt;</span><span class="str">marker</span> <span class="prop">id</span><span class="pnc">="arrow-dim"</span> <span class="prop">viewBox</span><span class="pnc">="0 0 10 10"</span> <span class="prop">refX</span><span class="pnc">="9"</span> <span class="prop">refY</span><span class="pnc">="5"</span> <span class="prop">markerWidth</span><span class="pnc">="7"</span> <span class="prop">markerHeight</span><span class="pnc">="7"</span> <span class="prop">orient</span><span class="pnc">="auto-start-reverse"&gt;</span>
+  <span class="pnc">&lt;</span><span class="str">path</span> <span class="prop">d</span><span class="pnc">="M 0 0 L 10 5 L 0 10 z"</span> <span class="prop">fill</span><span class="pnc">={</span><span class="prop">EDGE_DEFAULT</span><span class="pnc">}</span> <span class="prop">opacity</span><span class="pnc">="0.35"</span> <span class="pnc">/&gt;</span>
+<span class="pnc">&lt;/</span><span class="str">marker</span><span class="pnc">&gt;</span>
+<span class="cm">/* node-shadow and node-glow are REPLACED by these three: */</span>
+<span class="pnc">&lt;</span><span class="str">filter</span> <span class="prop">id</span><span class="pnc">="node-hover"</span> <span class="prop">x</span><span class="pnc">="-40%"</span> <span class="prop">y</span><span class="pnc">="-40%"</span> <span class="prop">width</span><span class="pnc">="180%"</span> <span class="prop">height</span><span class="pnc">="180%"&gt;</span>
+  <span class="pnc">&lt;</span><span class="str">feDropShadow</span> <span class="prop">dx</span><span class="pnc">="0"</span> <span class="prop">dy</span><span class="pnc">="3"</span> <span class="prop">stdDeviation</span><span class="pnc">="5"</span> <span class="prop">floodOpacity</span><span class="pnc">="0.13"</span> <span class="pnc">/&gt;</span>
+<span class="pnc">&lt;/</span><span class="str">filter</span><span class="pnc">&gt;</span>
+<span class="pnc">&lt;</span><span class="str">filter</span> <span class="prop">id</span><span class="pnc">="node-selected"</span> <span class="prop">x</span><span class="pnc">="-50%"</span> <span class="prop">y</span><span class="pnc">="-50%"</span> <span class="prop">width</span><span class="pnc">="200%"</span> <span class="prop">height</span><span class="pnc">="200%"&gt;</span>
+  <span class="pnc">&lt;</span><span class="str">feDropShadow</span> <span class="prop">dx</span><span class="pnc">="0"</span> <span class="prop">dy</span><span class="pnc">="2"</span> <span class="prop">stdDeviation</span><span class="pnc">="7"</span> <span class="prop">floodColor</span><span class="pnc">={</span><span class="prop">ACCENT</span><span class="pnc">}</span> <span class="prop">floodOpacity</span><span class="pnc">="0.28"</span> <span class="pnc">/&gt;</span>
+<span class="pnc">&lt;/</span><span class="str">filter</span><span class="pnc">&gt;</span>
+<span class="pnc">&lt;</span><span class="str">filter</span> <span class="prop">id</span><span class="pnc">="node-playing"</span> <span class="prop">x</span><span class="pnc">="-50%"</span> <span class="prop">y</span><span class="pnc">="-50%"</span> <span class="prop">width</span><span class="pnc">="200%"</span> <span class="prop">height</span><span class="pnc">="200%"&gt;</span>
+  <span class="pnc">&lt;</span><span class="str">feDropShadow</span> <span class="prop">dx</span><span class="pnc">="0"</span> <span class="prop">dy</span><span class="pnc">="0"</span> <span class="prop">stdDeviation</span><span class="pnc">="11"</span> <span class="prop">floodColor</span><span class="pnc">={</span><span class="prop">ACCENT</span><span class="pnc">}</span> <span class="prop">floodOpacity</span><span class="pnc">="0.72"</span> <span class="pnc">/&gt;</span>
+<span class="pnc">&lt;/</span><span class="str">filter</span><span class="pnc">&gt;</span>
+
+<span class="cm">/* ── 3. NodeV2 — state rendering ─────────────────────────────────────── */</span>
+<span class="cm">/* Replace the lift variable and the inner &lt;g&gt; / &lt;rect&gt; in the non-expanded path: */</span>
+
+<span class="cm">// Old: const lift = (playing && !node.expanded) ? 1.05 : (hovered ? 1.02 : 1);</span>
+<span class="kw">const</span> <span class="prop">lift</span> <span class="pnc">=</span> <span class="pnc">(</span><span class="prop">playing</span> <span class="pnc">&amp;&amp; !</span><span class="prop">node</span><span class="pnc">.</span><span class="prop">expanded</span><span class="pnc">)</span> <span class="pnc">?</span> <span class="num">1.05</span> <span class="pnc">:</span> <span class="num">1</span><span class="pnc">;</span>  <span class="cm">// hover no longer lifts</span>
+
+<span class="cm">// Inner &lt;g&gt; style:</span>
+<span class="prop">style</span><span class="pnc">={{</span>
+  <span class="prop">transformOrigin</span><span class="pnc">:</span> <span class="str">`${node.w / 2}px ${node.h / 2}px`</span><span class="pnc">,</span>
+  <span class="prop">transform</span><span class="pnc">:</span> <span class="str">`scale(${lift})`</span><span class="pnc">,</span>
+  <span class="prop">transition</span><span class="pnc">:</span> <span class="str">'transform 180ms cubic-bezier(.4,0,.2,1), filter 160ms'</span><span class="pnc">,</span>
+  <span class="prop">filter</span><span class="pnc">:</span> <span class="prop">playing</span> <span class="pnc">?</span> <span class="str">'url(#node-playing)'</span>
+         <span class="pnc">:</span> <span class="prop">selected</span> <span class="pnc">?</span> <span class="str">'url(#node-selected)'</span>
+         <span class="pnc">:</span> <span class="prop">hovered</span>  <span class="pnc">?</span> <span class="str">'url(#node-hover)'</span>
+         <span class="pnc">:</span> <span class="str">'none'</span><span class="pnc">,</span>
+<span class="pnc">}}</span>
+
+<span class="cm">// &lt;rect&gt; stroke:</span>
+<span class="prop">stroke</span><span class="pnc">={(</span><span class="prop">selected</span> <span class="pnc">||</span> <span class="prop">playing</span><span class="pnc">)</span> <span class="pnc">?</span> <span class="prop">accent</span> <span class="pnc">:</span> <span class="prop">colorScheme</span><span class="pnc">.</span><span class="prop">border</span><span class="pnc">}</span>
+<span class="prop">strokeWidth</span><span class="pnc">={</span><span class="prop">playing</span> <span class="pnc">?</span> <span class="num">3</span> <span class="pnc">:</span> <span class="prop">selected</span> <span class="pnc">?</span> <span class="num">2.5</span> <span class="pnc">:</span> <span class="prop">hovered</span> <span class="pnc">?</span> <span class="num">2</span> <span class="pnc">:</span> <span class="num">1</span><span class="pnc">}</span>
+
+<span class="cm">// SubNodeV2 — rename glow reference:</span>
+<span class="prop">filter</span><span class="pnc">:</span> <span class="prop">playing</span> <span class="pnc">?</span> <span class="str">'url(#node-playing)'</span> <span class="pnc">:</span> <span class="kw">undefined</span>
+
+<span class="cm">/* ── 4. Inner container chrome (ExpandedNodeV2) ───────────────────────── */</span>
+<span class="cm">/* Replace the single hardcoded fill/stroke with a depth-keyed lookup.
+   Pass `theme` prop through: NodeV2 → ExpandedNodeV2. */</span>
+
+<span class="kw">const</span> <span class="prop">IC_STYLES</span> <span class="pnc">= {</span>
+  <span class="prop">light</span><span class="pnc">: [</span>
+    <span class="pnc">{</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#f0eef8'</span><span class="pnc">,</span> <span class="prop">fOpacity</span><span class="pnc">:</span> <span class="num">0.45</span><span class="pnc">,</span> <span class="prop">stroke</span><span class="pnc">:</span> <span class="str">'#9080c8'</span><span class="pnc">,</span> <span class="prop">sw</span><span class="pnc">:</span> <span class="num">1.5</span><span class="pnc">,</span> <span class="prop">dash</span><span class="pnc">:</span> <span class="str">'5 3'</span> <span class="pnc">},</span>  <span class="cm">// depth 1</span>
+    <span class="pnc">{</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#e8e4f2'</span><span class="pnc">,</span> <span class="prop">fOpacity</span><span class="pnc">:</span> <span class="num">0.50</span><span class="pnc">,</span> <span class="prop">stroke</span><span class="pnc">:</span> <span class="str">'#7060a8'</span><span class="pnc">,</span> <span class="prop">sw</span><span class="pnc">:</span> <span class="num">1.2</span><span class="pnc">,</span> <span class="prop">dash</span><span class="pnc">:</span> <span class="str">'4 2'</span> <span class="pnc">},</span>  <span class="cm">// depth 2</span>
+    <span class="pnc">{</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#e0dcea'</span><span class="pnc">,</span> <span class="prop">fOpacity</span><span class="pnc">:</span> <span class="num">0.55</span><span class="pnc">,</span> <span class="prop">stroke</span><span class="pnc">:</span> <span class="str">'#5040a0'</span><span class="pnc">,</span> <span class="prop">sw</span><span class="pnc">:</span> <span class="num">1.0</span><span class="pnc">,</span> <span class="prop">dash</span><span class="pnc">:</span> <span class="str">'3 2'</span> <span class="pnc">},</span>  <span class="cm">// depth 3+</span>
+  <span class="pnc">],</span>
+  <span class="prop">dark</span><span class="pnc">: [</span>
+    <span class="pnc">{</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#28244a'</span><span class="pnc">,</span> <span class="prop">fOpacity</span><span class="pnc">:</span> <span class="num">0.45</span><span class="pnc">,</span> <span class="prop">stroke</span><span class="pnc">:</span> <span class="str">'#7068c0'</span><span class="pnc">,</span> <span class="prop">sw</span><span class="pnc">:</span> <span class="num">1.5</span><span class="pnc">,</span> <span class="prop">dash</span><span class="pnc">:</span> <span class="str">'5 3'</span> <span class="pnc">},</span>
+    <span class="pnc">{</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#201e3c'</span><span class="pnc">,</span> <span class="prop">fOpacity</span><span class="pnc">:</span> <span class="num">0.55</span><span class="pnc">,</span> <span class="prop">stroke</span><span class="pnc">:</span> <span class="str">'#5850a8'</span><span class="pnc">,</span> <span class="prop">sw</span><span class="pnc">:</span> <span class="num">1.2</span><span class="pnc">,</span> <span class="prop">dash</span><span class="pnc">:</span> <span class="str">'4 2'</span> <span class="pnc">},</span>
+    <span class="pnc">{</span> <span class="prop">fill</span><span class="pnc">:</span> <span class="str">'#181830'</span><span class="pnc">,</span> <span class="prop">fOpacity</span><span class="pnc">:</span> <span class="num">0.65</span><span class="pnc">,</span> <span class="prop">stroke</span><span class="pnc">:</span> <span class="str">'#403880'</span><span class="pnc">,</span> <span class="prop">sw</span><span class="pnc">:</span> <span class="num">1.0</span><span class="pnc">,</span> <span class="prop">dash</span><span class="pnc">:</span> <span class="str">'3 2'</span> <span class="pnc">},</span>
+  <span class="pnc">],</span>
+<span class="pnc">};</span>
+
+<span class="cm">/* Usage in ExpandedNodeV2 (ic = one innerContainer record): */</span>
+<span class="kw">const</span> <span class="prop">ics</span> <span class="pnc">=</span> <span class="prop">IC_STYLES</span><span class="pnc">[</span><span class="prop">theme</span><span class="pnc">] ||</span> <span class="prop">IC_STYLES</span><span class="pnc">.</span><span class="prop">light</span><span class="pnc">;</span>
+<span class="kw">const</span> <span class="prop">s</span>   <span class="pnc">=</span> <span class="prop">ics</span><span class="pnc">[</span><span class="prop">Math</span><span class="pnc">.</span><span class="prop">min</span><span class="pnc">((</span><span class="prop">ic</span><span class="pnc">.</span><span class="prop">depth</span> <span class="pnc">||</span> <span class="num">1</span><span class="pnc">) -</span> <span class="num">1</span><span class="pnc">,</span> <span class="num">2</span><span class="pnc">)];</span>
+
+<span class="pnc">&lt;</span><span class="str">rect</span>
+  <span class="prop">x</span><span class="pnc">={</span><span class="prop">ic</span><span class="pnc">.</span><span class="prop">x</span><span class="pnc">}</span> <span class="prop">y</span><span class="pnc">={</span><span class="prop">ic</span><span class="pnc">.</span><span class="prop">y</span><span class="pnc">}</span> <span class="prop">width</span><span class="pnc">={</span><span class="prop">ic</span><span class="pnc">.</span><span class="prop">w</span><span class="pnc">}</span> <span class="prop">height</span><span class="pnc">={</span><span class="prop">ic</span><span class="pnc">.</span><span class="prop">h</span><span class="pnc">}</span> <span class="prop">rx</span><span class="pnc">="8"</span>
+  <span class="prop">fill</span><span class="pnc">={</span><span class="prop">s</span><span class="pnc">.</span><span class="prop">fill</span><span class="pnc">}</span> <span class="prop">fillOpacity</span><span class="pnc">={</span><span class="prop">s</span><span class="pnc">.</span><span class="prop">fOpacity</span><span class="pnc">}</span>
+  <span class="prop">stroke</span><span class="pnc">={</span><span class="prop">s</span><span class="pnc">.</span><span class="prop">stroke</span><span class="pnc">}</span> <span class="prop">strokeWidth</span><span class="pnc">={</span><span class="prop">s</span><span class="pnc">.</span><span class="prop">sw</span><span class="pnc">}</span> <span class="prop">strokeDasharray</span><span class="pnc">={</span><span class="prop">s</span><span class="pnc">.</span><span class="prop">dash</span><span class="pnc">}</span>
+<span class="pnc">/&gt;</span>
+<span class="cm">/* Label text fill — match stroke color for depth legibility: */</span>
+<span class="prop">fill</span><span class="pnc">={</span><span class="prop">s</span><span class="pnc">.</span><span class="prop">stroke</span><span class="pnc">}</span>
+
+<span class="cm">/* ── 5. Input image node (bottom of GraphV2 return) ─────────────────── */</span>
+<span class="kw">const</span> <span class="prop">inputFill</span>    <span class="pnc">=</span> <span class="prop">theme</span> <span class="pnc">=== </span><span class="str">'dark'</span> <span class="pnc">?</span> <span class="str">'#1a2535'</span> <span class="pnc">:</span> <span class="str">'#f0ede8'</span><span class="pnc">;</span>
+<span class="kw">const</span> <span class="prop">inputStroke</span>  <span class="pnc">=</span> <span class="prop">theme</span> <span class="pnc">=== </span><span class="str">'dark'</span> <span class="pnc">?</span> <span class="str">'#304555'</span> <span class="pnc">:</span> <span class="str">'#c0bab2'</span><span class="pnc">;</span>
+<span class="kw">const</span> <span class="prop">inputText</span>    <span class="pnc">=</span> <span class="prop">theme</span> <span class="pnc">=== </span><span class="str">'dark'</span> <span class="pnc">?</span> <span class="str">'#5a7a96'</span> <span class="pnc">:</span> <span class="str">'#7a7470'</span><span class="pnc">;</span>
+<span class="cm">/* Use inputFill/inputStroke on the &lt;rect&gt; and inputText on both &lt;text&gt; nodes. */</span></pre>
+    </details>
+
+    <!-- ── app-v2.jsx ── -->
+    <details class="cf">
+      <summary><span class="arr">›</span> app-v2.jsx — theme toggle edge colors</summary>
+      <pre class="cb"><span class="cm">/* In toggleTheme, replace the existing dark edge color assignments:
+       LS.EDGE_COLOR_DEFAULT = '#64748b';
+       LS.EDGE_COLOR_DIMMED  = '#334155';
+   With calibrated values that sit clearly above the darker graph canvas: */</span>
+
+<span class="kw">if</span> <span class="pnc">(</span><span class="prop">next</span> <span class="pnc">===</span> <span class="str">'dark'</span><span class="pnc">) {</span>
+  <span class="prop">LS</span><span class="pnc">.</span><span class="prop">EDGE_COLOR_DEFAULT</span> <span class="pnc">=</span> <span class="str">'#2a4058'</span><span class="pnc">;</span>  <span class="cm">// mid-blue-slate — visible on #0c1118</span>
+  <span class="prop">LS</span><span class="pnc">.</span><span class="prop">EDGE_COLOR_DIMMED</span>  <span class="pnc">=</span> <span class="str">'#1a2c40'</span><span class="pnc">;</span>  <span class="cm">// nearly-hidden dimmed</span>
+  <span class="prop">LS</span><span class="pnc">.</span><span class="prop">EDGE_COLOR_FOCUSED</span> <span class="pnc">=</span> <span class="prop">LS</span><span class="pnc">.</span><span class="prop">ACCENT_COLOR</span><span class="pnc">;</span>
+<span class="pnc">} else {</span>
+  <span class="kw">const</span> <span class="prop">DEF</span> <span class="pnc">=</span> <span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">.</span><span class="prop">LAYOUT_SETTINGS_DEFAULTS</span><span class="pnc">;</span>
+  <span class="prop">LS</span><span class="pnc">.</span><span class="prop">EDGE_COLOR_DEFAULT</span> <span class="pnc">=</span> <span class="prop">DEF</span><span class="pnc">.</span><span class="prop">EDGE_COLOR_DEFAULT</span><span class="pnc">;</span>
+  <span class="prop">LS</span><span class="pnc">.</span><span class="prop">EDGE_COLOR_DIMMED</span>  <span class="pnc">=</span> <span class="prop">DEF</span><span class="pnc">.</span><span class="prop">EDGE_COLOR_DIMMED</span><span class="pnc">;</span>
+  <span class="prop">LS</span><span class="pnc">.</span><span class="prop">EDGE_COLOR_FOCUSED</span> <span class="pnc">=</span> <span class="prop">LS</span><span class="pnc">.</span><span class="prop">ACCENT_COLOR</span><span class="pnc">;</span>
+<span class="pnc">}</span>
+
+<span class="cm">/* And update the light-mode defaults in layout-v2.jsx to match:
+   EDGE_COLOR_DEFAULT: '#9aa8b8',  (was '#94a3b8' or similar)
+   EDGE_COLOR_DIMMED:  '#c4ccd8',
+   EDGE_COLOR_FOCUSED: ACCENT_COLOR (set at runtime after arch-v2 loads),
+   EDGE_STROKE_DEFAULT: 1.2,
+   EDGE_STROKE_FOCUSED: 2.0,
+   CONTAINER_DASH: '6 4',          (role container outlines) */</span></pre>
+    </details>
+
+  </div><!-- /code-files -->
+</spec-section>
+
+</div><!-- /wrap -->
+
+<script>
+function showPalette(theme, btn) {
+  document.getElementById('pal-light').style.display = theme === 'light' ? '' : 'none';
+  document.getElementById('pal-dark').style.display  = theme === 'dark'  ? '' : 'none';
+  document.querySelectorAll('.ptab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
