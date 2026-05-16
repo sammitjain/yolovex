@@ -12,12 +12,14 @@ function formatShape(sh) {
   return null;
 }
 
-function GraphV2({ selected, hover, onSelect, onHover, onExpandedCountChange }) {
+function GraphV2({ selected, hover, playing, onSelect, onHover, onExpandedCountChange, onVisibleOrderChange, settingsRev = 0, theme = 'light', onToggleTheme }) {
   // L1-block id derived from the unified hover/select payload; the styling
   // logic below (edge dimming, lift, selected glow) is L1-only, so sub-node
   // hovers still focus their parent block.
   const hoveredIdx = hover ? hover.idx : null;
   const selectedIdx = selected ? selected.idx : null;
+  const playingIdx = playing ? playing.idx : null;
+  const playingFx = (playing && playing.pathKey != null) ? (playing.fxKey || null) : null;
   const V = window.YVV2;
   const arch = useMemo(() => V.buildArch(), []);
   const rawEdges = useMemo(() => V.buildEdges(), []);
@@ -79,9 +81,9 @@ function GraphV2({ selected, hover, onSelect, onHover, onExpandedCountChange }) 
   // even if clicked, so count the realised regions, not the raw click set).
   const expandedCount = Object.keys(expansionMap).length;
 
-  const { nodes, totalW, totalH } = useMemo(() => V.layoutGraph(arch, expansionMap), [arch, expansionMap]);
+  const { nodes, totalW, totalH } = useMemo(() => V.layoutGraph(arch, expansionMap), [arch, expansionMap, settingsRev]);
   const edgeMeta = useMemo(() => V.buildEdgeMeta(rawEdges, arch), [rawEdges, arch]);
-  const containers = useMemo(() => V.computeContainers(arch, nodes), [arch, nodes]);
+  const containers = useMemo(() => V.computeContainers(arch, nodes), [arch, nodes, settingsRev]);
   const skipSources = useMemo(() => {
     const s = new Set();
     rawEdges.forEach(e => { if (e.is_skip) s.add(e.src); });
@@ -93,7 +95,47 @@ function GraphV2({ selected, hover, onSelect, onHover, onExpandedCountChange }) 
     if (onExpandedCountChange) onExpandedCountChange(expandedCount);
   }, [expandedCount, onExpandedCountChange]);
 
-  const { TYPE_COLORS, ROLE_COLORS, ACCENT } = V;
+  // Surface the visible play-flow order to the parent — dataflow order over
+  // exactly the blocks/sub-nodes that are currently rendered on the canvas.
+  // Each entry is a payload identical to what onHover/onSelect dispatch.
+  const visibleOrder = useMemo(() => {
+    const order = [];
+    for (const b of arch) {
+      const ex = expansionMap[b.idx];
+      if (ex && ex.subNodes && ex.subNodes.length) {
+        for (const sn of ex.subNodes) {
+          const members = sn.members || [sn.id];
+          const fxKey = members[members.length - 1];
+          const firstFxKey = members[0];
+          order.push({
+            idx: b.idx,
+            pathKey: sn.pathKey,
+            fxKey,
+            firstFxKey,
+            members,
+            subkind: sn.subkind || 'sub',
+          });
+        }
+      } else {
+        order.push({ idx: b.idx, pathKey: null });
+      }
+    }
+    return order;
+  }, [arch, expansionMap]);
+
+  useEffect(() => {
+    if (onVisibleOrderChange) onVisibleOrderChange(visibleOrder);
+  }, [visibleOrder, onVisibleOrderChange]);
+
+  const { TYPE_COLORS, ROLE_COLORS } = V;
+  const LS = window.YVV2.LAYOUT_SETTINGS;
+  const ACCENT = LS.ACCENT_COLOR;
+  const EDGE_DEFAULT = LS.EDGE_COLOR_DEFAULT;
+  const EDGE_DIMMED = LS.EDGE_COLOR_DIMMED;
+  const EDGE_FOCUSED = LS.EDGE_COLOR_FOCUSED;
+  const SW_DEFAULT = LS.EDGE_STROKE_DEFAULT;
+  const SW_FOCUSED = LS.EDGE_STROKE_FOCUSED;
+  const CONTAINER_DASH = LS.CONTAINER_DASH;
 
   const containerRef = useRef(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
@@ -178,7 +220,9 @@ function GraphV2({ selected, hover, onSelect, onHover, onExpandedCountChange }) 
     };
   }, []);
 
-  const focusIdx = hoveredIdx ?? selectedIdx;
+  // playing takes priority for focus (so edges to/from the active step pop),
+  // then hover, then selection.
+  const focusIdx = playingIdx ?? hoveredIdx ?? selectedIdx;
   const isEdgeFocused = (e) => focusIdx != null && (e.src === focusIdx || e.dst === focusIdx);
   const connectedTo = (idx, other) =>
     edgeMeta.some(e => (e.src === idx && e.dst === other) || (e.dst === idx && e.src === other));
@@ -217,13 +261,13 @@ function GraphV2({ selected, hover, onSelect, onHover, onExpandedCountChange }) 
                 <rect
                   x={c.x} y={c.y} width={c.w} height={c.h}
                   fill="none" stroke={ROLE_COLORS[c.role]} strokeWidth="1.2"
-                  strokeDasharray="4 4" rx="14" opacity="0.55"
+                  strokeDasharray={CONTAINER_DASH} rx="14" opacity="0.55"
                 />
               ) : (
                 <path
                   d={c.path}
                   fill="none" stroke={ROLE_COLORS[c.role]} strokeWidth="1.2"
-                  strokeDasharray="4 4" opacity="0.55"
+                  strokeDasharray={CONTAINER_DASH} opacity="0.55"
                 />
               )}
               <text
@@ -243,9 +287,9 @@ function GraphV2({ selected, hover, onSelect, onHover, onExpandedCountChange }) 
             const paths = V.edgePaths(e, nodes, arch);
             const focused = isEdgeFocused(e);
             const isAccent = e.kind === 'skip' || e.kind === 'detect';
-            const stroke = focused ? ACCENT : (isAccent ? ACCENT : '#94a3b8');
+            const stroke = focused ? EDGE_FOCUSED : (isAccent ? ACCENT : EDGE_DEFAULT);
             const opacity = focusIdx != null && !focused ? 0.18 : (isAccent ? 0.85 : 0.55);
-            const sw = focused ? 2.6 : (isAccent ? 1.8 : 1);
+            const sw = focused ? SW_FOCUSED : (isAccent ? SW_DEFAULT * 1.25 : SW_DEFAULT);
             const marker = focused
               ? 'url(#arrow-accent)'
               : (focusIdx != null ? 'url(#arrow-dim)' : (isAccent ? 'url(#arrow-accent)' : 'url(#arrow-gray)'));
@@ -271,6 +315,8 @@ function GraphV2({ selected, hover, onSelect, onHover, onExpandedCountChange }) 
               node={nodes[b.idx]}
               hovered={hoveredIdx === b.idx}
               selected={selectedIdx === b.idx}
+              playing={playingIdx === b.idx}
+              playingFx={playingIdx === b.idx ? playingFx : null}
               dimmed={focusIdx != null && focusIdx !== b.idx && !connectedTo(focusIdx, b.idx)}
               isSkipSource={skipSources.has(b.idx)}
               colorScheme={TYPE_COLORS[b.type] || TYPE_COLORS.Conv}
@@ -304,13 +350,19 @@ function GraphV2({ selected, hover, onSelect, onHover, onExpandedCountChange }) 
         {expandedCount > 0 && (
           <button onClick={collapseAll} title="Collapse all expanded blocks" className="fit-btn">⊟</button>
         )}
+        {onToggleTheme && (
+          <button onClick={onToggleTheme} className="theme-btn"
+            title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
+            {theme === 'dark' ? '☀' : '☾'}
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
-function NodeV2({ block, node, hovered, selected, dimmed, isSkipSource, colorScheme, onHover, onSelect, onToggleExpand, onToggleSubExpand, accent }) {
-  const lift = hovered ? 1.02 : 1;
+function NodeV2({ block, node, hovered, selected, playing, playingFx, dimmed, isSkipSource, colorScheme, onHover, onSelect, onToggleExpand, onToggleSubExpand, accent }) {
+  const lift = (playing && !node.expanded) ? 1.05 : (hovered ? 1.02 : 1);
   const opacity = dimmed ? 0.35 : 1;
   const isDetect = block.type === 'Detect';
   const shape = formatShape(block.outputShape);
@@ -338,6 +390,7 @@ function NodeV2({ block, node, hovered, selected, dimmed, isSkipSource, colorSch
           node={node}
           colorScheme={colorScheme}
           accent={accent}
+          playingFx={playingFx}
           onHover={onHover}
           onSelect={onSelect}
           onToggleSubExpand={onToggleSubExpand}
@@ -348,7 +401,7 @@ function NodeV2({ block, node, hovered, selected, dimmed, isSkipSource, colorSch
             transformOrigin: `${node.w / 2}px ${node.h / 2}px`,
             transform: `scale(${lift})`,
             transition: 'transform 180ms cubic-bezier(.4,0,.2,1)',
-            filter: selected ? 'url(#node-glow)' : (hovered ? 'url(#node-shadow)' : 'none'),
+            filter: (playing || selected) ? 'url(#node-glow)' : (hovered ? 'url(#node-shadow)' : 'none'),
           }}
         >
           {isDetect ? (
@@ -358,8 +411,8 @@ function NodeV2({ block, node, hovered, selected, dimmed, isSkipSource, colorSch
               <rect
                 width={node.w} height={node.h} rx="8"
                 fill={colorScheme.fill}
-                stroke={selected ? accent : colorScheme.border}
-                strokeWidth={selected ? 2 : 1}
+                stroke={(selected || playing) ? accent : colorScheme.border}
+                strokeWidth={(selected || playing) ? 2 : 1}
               />
               <text x="12" y="22" fontSize="11" fontWeight="500" fill={colorScheme.text}
                 fontFamily="ui-monospace, SFMono-Regular, monospace" opacity="0.7">
@@ -413,7 +466,7 @@ function fxMembersInContainer(specId, containerPath) {
   return out;
 }
 
-function ExpandedNodeV2({ block, node, colorScheme, accent, onHover, onSelect, onToggleSubExpand }) {
+function ExpandedNodeV2({ block, node, colorScheme, accent, playingFx, onHover, onSelect, onToggleSubExpand }) {
   const { SUB_KIND_COLORS, subFormatShape } = window.YVV2;
   const region = node.region;
   return (
@@ -492,23 +545,35 @@ function ExpandedNodeV2({ block, node, colorScheme, accent, onHover, onSelect, o
       ))}
 
       {/* Internal sub-nodes */}
-      {region.subNodes.map(sn => (
-        <SubNodeV2
-          key={sn.id}
-          sn={sn}
-          blockIdx={block.idx}
-          onHover={onHover}
-          onSelect={onSelect}
-          onToggleSubExpand={onToggleSubExpand}
-          SUB_KIND_COLORS={SUB_KIND_COLORS}
-          subFormatShape={subFormatShape}
-        />
-      ))}
+      {region.subNodes.map(sn => {
+        // Sub-node is the play-flow's current step if its last fx member or
+        // its pathKey matches the playing payload.
+        const members = sn.members || [sn.id];
+        const isPlaying = !!playingFx && (
+          playingFx === members[members.length - 1] ||
+          playingFx === members[0] ||
+          members.includes(playingFx)
+        );
+        return (
+          <SubNodeV2
+            key={sn.id}
+            sn={sn}
+            blockIdx={block.idx}
+            playing={isPlaying}
+            accent={accent}
+            onHover={onHover}
+            onSelect={onSelect}
+            onToggleSubExpand={onToggleSubExpand}
+            SUB_KIND_COLORS={SUB_KIND_COLORS}
+            subFormatShape={subFormatShape}
+          />
+        );
+      })}
     </g>
   );
 }
 
-function SubNodeV2({ sn, blockIdx, onHover, onSelect, onToggleSubExpand, SUB_KIND_COLORS, subFormatShape }) {
+function SubNodeV2({ sn, blockIdx, playing, accent, onHover, onSelect, onToggleSubExpand, SUB_KIND_COLORS, subFormatShape }) {
   const sk = sn.subkind;
   const expandable = sn.expandable;
   // Lookup key for activations: the last fx-graph member of this group. For a
@@ -562,9 +627,9 @@ function SubNodeV2({ sn, blockIdx, onHover, onSelect, onToggleSubExpand, SUB_KIN
   const c = SUB_KIND_COLORS[sk] || SUB_KIND_COLORS.mod;
   const sh = subFormatShape(sn.shape);
   return (
-    <g style={{ cursor }} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={handleClick}>
+    <g style={{ cursor, filter: playing ? 'url(#node-glow)' : undefined }} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={handleClick}>
       <rect x={sn.x} y={sn.y} width={sn.w} height={sn.h} rx="6"
-        fill={c.fill} stroke={c.border} strokeWidth={expandable ? 2 : 1.5}
+        fill={c.fill} stroke={playing ? accent : c.border} strokeWidth={playing ? 2.5 : (expandable ? 2 : 1.5)}
         strokeDasharray={expandable ? '6 3' : undefined} />
       <text x={sn.x + sn.w / 2} y={sn.y + sn.h / 2 + (sh ? -2 : 4)} fontSize="12" fontWeight="600"
         fill={c.text} textAnchor="middle">

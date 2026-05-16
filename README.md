@@ -37,6 +37,13 @@ Once it's open:
 - **shift+click** → peel it open into its internals (repeat to go deeper)
 - **escape** or **click outside the panel** → close it
 
+### What else is in there
+
+- **Detect side panel** — clicking the Detect head (or P3 / P4 / P5) opens a panel with bbox overlay on the input image, a confidence slider plus a numeric input (type any value for runners-up), a horizontal bar chart of survivors colored by class, and a per-class score heatmap grid (rows = top-N classes by peak, columns = P3 / P4 / P5 — choose how many classes to show, capped at 12). Class names come from `model.names`, not hardcoded — drop in any image and the panel adapts.
+- **Play flow** — the ▶ button in the header animates the active activation through every currently-rendered node in dataflow order. Expand a block first and the traversal walks its internals. Slow / medium / fast speed. The run ends on the Detect head's annotated bbox frame, which sticks around as the "final result" until you hover something else or play again. Nodes without a 4-D tensor (e.g. `chunk`, elementwise `add`) keep showing the previous step's activation instead of snapping back to the raw input.
+- **Settings drawer** — ⚙ in the header. Live-tune all the layout constants (row / col gaps, container padding, node size, edge tail lengths, neck offsets — split into independent foot and body), edge / accent colors, container dash, CSS tokens, and the brochure / scale-grid tile scales. Reset restores defaults.
+- **Light / dark theme** — ☾ button in the bottom-right zoom cluster flips the page chrome, panels, and graph canvas. SVG node fills stay light pastel by design so they pop against the dark canvas.
+
 ## CLI tour
 
 A few other things `yolovex` can do from the command line:

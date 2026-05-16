@@ -88,7 +88,7 @@ const TYPE_COPY = {
   },
   Detect: {
     title: 'Detect head — anchor-free, NMS-free',
-    blurb: 'Runs three parallel conv heads (one per scale) and emits boxes + class scores per anchor cell. Activations deferred — coming in a later pass.',
+    blurb: 'Runs three parallel conv heads (one per scale) and emits boxes + class scores per anchor cell. Final detections come from a top-K filter on the one-to-one branch (NMS-free).',
   },
 };
 
@@ -226,6 +226,13 @@ function FlowOverlayV2({ active, lastActive }) {
   const meta = window.YV_ACT?.meta;
   const inputImageUrl = meta ? '../' + meta.image : '../assets/sammit_lighthouse.jpg';
 
+  // Remember the last activation image we successfully rendered, so a step
+  // that has no 4-D tensor captured (chunk/getitem/elementwise-add returning a
+  // list, etc.) can fall back to "what we were just showing" instead of
+  // snapping all the way back to the raw input image. This keeps the play-flow
+  // illusion intact when traversing fx nodes that don't yield a renderable tensor.
+  const lastImgRef = useRef({ src: null, label: null, sub: null });
+
   // Aspect ratio derived from the actual input image dims; never hardcoded.
   const aspect = (meta?.image_w && meta?.image_h)
     ? `${meta.image_w} / ${meta.image_h}`
@@ -237,15 +244,24 @@ function FlowOverlayV2({ active, lastActive }) {
   let label = 'input image';
   let sub = 'before any layer runs';
   let stretchedActivation = false;
+  let detectFrame = null;
 
+  let usingFallback = false;
   if (display) {
-    if (isDeferred(display)) {
+    const block = window.YV_ACT?.nodes?.[String(display.idx)];
+    const type = block?.type;
+    if (type === 'Detect' && block?.detect) {
+      // Annotated final-detections frame — terminus of the flow.
+      const survivors = (block.detect.boxes || []);
+      detectFrame = { survivors, losers: [] };
+      label = `[${display.idx}] final detections`;
+      sub = `${survivors.length} survivor${survivors.length === 1 ? '' : 's'}`;
+      lastImgRef.current = { src: null, label, sub };
+    } else if (isDeferred(display)) {
       label = `[${display.idx}] activations deferred`;
       sub = 'detect head — coming later';
     } else {
       const act = lookupActivation(display);
-      const block = window.YV_ACT?.nodes?.[String(display.idx)];
-      const type = block?.type;
       const friendly = copyFor(type).title.split(' — ')[0] || type;
       if (act && act.mean) {
         src = act.mean;
@@ -257,6 +273,19 @@ function FlowOverlayV2({ active, lastActive }) {
           label = `[${display.idx}] ${friendly} · ${last}`;
         }
         sub = act.shape ? `shape ${act.shape.join('×')}` : '';
+        // Remember this frame for the next no-activation node.
+        lastImgRef.current = { src, label, sub };
+      } else if (lastImgRef.current.src) {
+        // No 4-D tensor here — keep showing the previous step's activation
+        // rather than snapping back to the raw input image.
+        src = lastImgRef.current.src;
+        stretchedActivation = true;
+        const stepLabel = display.pathKey != null
+          ? (display.pathKey.split('/').pop() || display.fxKey || '')
+          : friendly;
+        label = `[${display.idx}] ${stepLabel} · passthrough`;
+        sub = 'no 4-D tensor — showing prior activation';
+        usingFallback = true;
       } else {
         label = `[${display.idx}] ${friendly || ''}`;
         sub = 'no captured activation';
@@ -265,15 +294,24 @@ function FlowOverlayV2({ active, lastActive }) {
   }
 
   return (
-    <div className="flow-overlay">
+    <div className={`flow-overlay ${usingFallback ? 'using-fallback' : ''}`}>
       <div className="flow-overlay__frame" style={{ aspectRatio: aspect }}>
-        <img
-          src={src} alt=""
-          style={{
-            imageRendering: stretchedActivation ? 'pixelated' : 'auto',
-            background: stretchedActivation ? '#0f172a' : 'transparent',
-          }}
-        />
+        {detectFrame ? (
+          <BoxOverlayImage
+            imageUrl={inputImageUrl}
+            survivors={detectFrame.survivors}
+            losers={detectFrame.losers}
+            fillContainer
+          />
+        ) : (
+          <img
+            src={src} alt=""
+            style={{
+              imageRendering: stretchedActivation ? 'pixelated' : 'auto',
+              background: stretchedActivation ? '#0f172a' : 'transparent',
+            }}
+          />
+        )}
       </div>
       <div className="flow-overlay__caption">{label}</div>
       <div className="flow-overlay__sub">{sub}</div>
@@ -337,6 +375,285 @@ function IOStripV2({ active, output }) {
 }
 
 // =============================================================================
+// Detect panel — bbox overlay + threshold control + bar chart + per-class grid
+// =============================================================================
+
+const BOX_PALETTE = ['#ef4444','#3b82f6','#22c55e','#f59e0b','#a855f7','#ec4899','#14b8a6','#f97316'];
+const colorForCls = (clsId) => BOX_PALETTE[(clsId ?? 0) % BOX_PALETTE.length];
+
+// Bbox overlay (ported from L2 app-l2.jsx:184).
+function BoxOverlayImage({ imageUrl, survivors, losers, maxWidth = 300, fillContainer = false }) {
+  const labelTag = (b) => (
+    <div
+      style={{
+        position: 'absolute',
+        left: `${b.x1 * 100}%`,
+        top: b.y1 > 0.05 ? `calc(${b.y1 * 100}% - 14px)` : `${b.y1 * 100}%`,
+        fontSize: 10, lineHeight: '14px', padding: '0 5px',
+        background: colorForCls(b.cls_id), color: 'white',
+        fontFamily: 'ui-monospace, SFMono-Regular, monospace',
+        fontWeight: 500, borderRadius: 2, whiteSpace: 'nowrap',
+      }}
+    >
+      {b.cls_name} {b.conf.toFixed(2)}
+    </div>
+  );
+  return (
+    <div
+      style={
+        fillContainer
+          ? { position: 'relative', width: '100%', height: '100%' }
+          : { position: 'relative', display: 'inline-block', maxWidth: '100%' }
+      }
+    >
+      <img
+        src={imageUrl}
+        alt=""
+        style={
+          fillContainer
+            ? { display: 'block', width: '100%', height: '100%', objectFit: 'cover' }
+            : { display: 'block', width: '100%', maxWidth, borderRadius: 6, border: '1px solid var(--line)' }
+        }
+      />
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
+        {losers.map((b, i) => (
+          <div key={`L${i}`} style={{
+            position: 'absolute',
+            left: `${b.x1 * 100}%`,
+            top: `${b.y1 * 100}%`,
+            width: `${Math.max(0.001, b.x2 - b.x1) * 100}%`,
+            height: `${Math.max(0.001, b.y2 - b.y1) * 100}%`,
+            border: `1.25px dashed ${colorForCls(b.cls_id)}`,
+            borderRadius: 2, opacity: 0.5, boxSizing: 'border-box',
+          }} />
+        ))}
+        {survivors.map((b, i) => (
+          <React.Fragment key={`S${i}`}>
+            <div style={{
+              position: 'absolute',
+              left: `${b.x1 * 100}%`,
+              top: `${b.y1 * 100}%`,
+              width: `${Math.max(0.001, b.x2 - b.x1) * 100}%`,
+              height: `${Math.max(0.001, b.y2 - b.y1) * 100}%`,
+              border: `2px solid ${colorForCls(b.cls_id)}`,
+              borderRadius: 2, boxSizing: 'border-box',
+            }} />
+            {labelTag(b)}
+          </React.Fragment>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Per-class score grid (ported from L1 panel.jsx:419).
+// classCount caps how many of the available classes are rendered.
+function ScaleGridV2({ scales, classCount, imageUrl }) {
+  const scaleNames = ['P3', 'P4', 'P5'];
+  const sizeMap = { P3: 'small', P4: 'medium', P5: 'large' };
+  const baseClasses = scales[scaleNames[0]]?.classes || [];
+  const n = Math.max(0, Math.min(classCount, baseClasses.length));
+
+  return (
+    <div className="scale-grid">
+      <div className="scale-grid-header first">class</div>
+      {scaleNames.map((name) => (
+        <div key={name} className="scale-grid-header">
+          {name} <span className="sub">stride {scales[name]?.stride} · {sizeMap[name]}</span>
+        </div>
+      ))}
+
+      <div className="scale-grid-imgrow">
+        <div style={{ fontSize: 11, color: 'var(--ink-3)', padding: '0 4px' }}>image</div>
+        {scaleNames.map((name) => (
+          <img key={name} src={imageUrl} alt="" className="scale-ref" />
+        ))}
+      </div>
+
+      {Array.from({ length: n }).map((_, ci) => {
+        const cells = scaleNames.map(name => scales[name]?.classes?.[ci]).filter(Boolean);
+        if (!cells.length) return null;
+        const peaks = cells.map(c => c.peak);
+        const peakScale = peaks.indexOf(Math.max(...peaks));
+        const maxPeak = Math.max(...peaks);
+        return (
+          <React.Fragment key={ci}>
+            <div className="scale-grid-class">
+              <span className="cls-name">{cells[0].name}</span>
+              <span className="cls-peak">peak {maxPeak.toFixed(2)}</span>
+            </div>
+            {cells.map((c, i) => {
+              const isPeak = i === peakScale && c.peak >= 0.05;
+              const faint = c.peak < 0.02;
+              return (
+                <div key={i} className={`scale-grid-cell ${isPeak ? 'is-peak' : ''} ${faint ? 'faint' : ''}`}>
+                  <img src={c.png} alt="" />
+                  <span className="cell-score">{c.peak.toFixed(2)}</span>
+                </div>
+              );
+            })}
+          </React.Fragment>
+        );
+      })}
+    </div>
+  );
+}
+
+function DetectPanelV2({ selected, block, archBlock, roleColor, role, onClose }) {
+  const detect = block?.detect;
+  const meta = window.YV_ACT?.meta;
+  const inputImageUrl = meta ? '../' + meta.image : '../assets/sammit_lighthouse.jpg';
+
+  const candidates = detect?.candidate_boxes && detect.candidate_boxes.length > 0
+    ? detect.candidate_boxes
+    : (detect?.boxes || []);
+  const scales = detect?.scales || {};
+  const availableClasses = scales.P3?.classes?.length || 0;
+
+  const [confThreshold, setConfThreshold] = useState(0.25);
+  const [classCount, setClassCount] = useState(Math.min(6, availableClasses || 6));
+
+  const survivors = candidates.filter(b => b.conf >= confThreshold);
+  const losers = candidates.filter(b => b.conf < confThreshold);
+
+  const copy = copyFor('Detect');
+  const title = `[${selected.idx}] ${copy.title}`;
+
+  // Numeric input is decoupled from slider min so very low values can be typed.
+  const onTypedThreshold = (e) => {
+    const v = parseFloat(e.target.value);
+    if (Number.isFinite(v) && v >= 0 && v <= 1) setConfThreshold(v);
+  };
+
+  return (
+    <div className="panel-inner">
+      <header className="panel-header">
+        <div>
+          <div className="panel-title">{title}</div>
+          <div className="panel-desc">{copy.blurb}</div>
+          {archBlock?.desc && <div className="panel-path-hint">{archBlock.desc}</div>}
+          <span className="role-pill" style={{ background: roleColor + '22', color: roleColor, marginTop: 10 }}>
+            {role}
+          </span>
+        </div>
+        <button className="close-btn" onClick={onClose} aria-label="Close">×</button>
+      </header>
+
+      {!detect && (
+        <section className="panel-section">
+          <div className="panel-empty">
+            No detect payload captured. Re-run <code>yolovex build-assets-v2</code> to populate detections.
+          </div>
+        </section>
+      )}
+
+      {detect && (
+        <>
+          <section className="panel-section">
+            <h4 className="section-label">Final detections</h4>
+            <p className="micro-help">
+              Solid boxes are above your threshold ({confThreshold.toFixed(3)}). Faded dashed boxes are runners-up the head also emitted but that fall below it. Slide or type a different threshold to watch which boxes graduate or get dropped.
+            </p>
+            <BoxOverlayImage
+              imageUrl={inputImageUrl}
+              survivors={survivors}
+              losers={losers}
+              maxWidth={420}
+            />
+
+            <div className="detect-conf-box">
+              <div className="detect-conf-row">
+                <strong>Confidence threshold</strong>
+                <span className="num">{confThreshold.toFixed(3)}</span>
+              </div>
+              <div className="detect-conf-controls">
+                <input
+                  type="range"
+                  min={0.005} max={1} step={0.005}
+                  value={Math.min(1, Math.max(0.005, confThreshold))}
+                  onChange={(e) => setConfThreshold(parseFloat(e.target.value))}
+                />
+                <input
+                  type="number"
+                  min={0} max={1} step="any"
+                  value={confThreshold}
+                  onChange={onTypedThreshold}
+                  title="Type any value 0–1 (slider clamps to 0.005)"
+                />
+              </div>
+              <div className="detect-conf-bounds">
+                <span>0.005</span><span>1.000</span>
+              </div>
+              <div className="detect-conf-stats">
+                <strong style={{ color: 'var(--ink)' }}>{survivors.length}</strong> survivors ·{' '}
+                <span className="muted">{losers.length} runners-up</span> ·{' '}
+                <span className="muted">{candidates.length} total candidates</span>
+              </div>
+            </div>
+
+            {survivors.length > 0 ? (
+              <div className="det-bars">
+                {survivors.map((b, i) => (
+                  <div key={i} className="det-bar">
+                    <span className="dot" style={{ background: colorForCls(b.cls_id) }} />
+                    <span className="name" title={b.cls_name}>{b.cls_name}</span>
+                    <span className="track">
+                      <span className="fill" style={{
+                        width: `${Math.min(100, b.conf * 100)}%`,
+                        background: colorForCls(b.cls_id),
+                        opacity: 0.78,
+                      }} />
+                    </span>
+                    <span className="conf">{b.conf.toFixed(3)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="det-empty">No detections above the current threshold. Slide it down.</div>
+            )}
+          </section>
+
+          {availableClasses > 0 && (
+            <section className="panel-section">
+              <h4 className="section-label">Per-class score heatmaps</h4>
+              <p className="micro-help">
+                Top {classCount} classes by peak score across all scales, arranged so each <strong>row</strong> is a class and each <strong>column</strong> is a pyramid scale. Easy way to see <em>which scale a class actually fires on</em> — small objects light up in P3, large ones in P5. The cell with the brightest peak for that class is highlighted.
+              </p>
+              <div className="detect-classes-control">
+                <span>Classes shown:</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={availableClasses}
+                  step={1}
+                  value={classCount}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (Number.isFinite(v)) setClassCount(Math.max(1, Math.min(availableClasses, v)));
+                  }}
+                />
+                <span style={{ color: 'var(--ink-4)' }}>of {availableClasses} available</span>
+              </div>
+              <ScaleGridV2 scales={scales} classCount={classCount} imageUrl={inputImageUrl} />
+            </section>
+          )}
+
+          <section className="panel-section">
+            <h4 className="section-label">Structure</h4>
+            <div className="stats-grid">
+              <div><span className="k">classes</span><span className="v mono">{detect.nc ?? '—'}</span></div>
+              <div><span className="k">strides</span><span className="v mono">{Array.isArray(detect.strides) ? detect.strides.join(', ') : '—'}</span></div>
+              <div><span className="k">survivors (conf ≥ 0.05)</span><span className="v mono">{(detect.boxes || []).length}</span></div>
+              <div><span className="k">total candidates</span><span className="v mono">{candidates.length}</span></div>
+            </div>
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
 // Detail panel
 // =============================================================================
 
@@ -355,6 +672,23 @@ function DetailPanelV2({ selected, onClose, panelRef }) {
   const ROLE_COLORS = window.YVV2.ROLE_COLORS;
   const role = archBlock?.role || 'Backbone';
   const roleColor = ROLE_COLORS[role] || '#64748b';
+
+  // Detect blocks (and any sub-click inside one — P3/P4/P5 etc.) all open the
+  // same dedicated Detect panel: bbox overlay + threshold + bar chart + per-class grid.
+  if (block?.type === 'Detect') {
+    return (
+      <aside className="detail-panel open" ref={panelRef}>
+        <DetectPanelV2
+          selected={selected}
+          block={block}
+          archBlock={archBlock}
+          roleColor={roleColor}
+          role={role}
+          onClose={onClose}
+        />
+      </aside>
+    );
+  }
 
   // What "type" copy applies — for L1 use block.type; for sub-nodes try to
   // infer from the fx node's target_class via the spec.
@@ -504,6 +838,182 @@ function DetailPanelV2({ selected, onClose, panelRef }) {
 // Shell
 // =============================================================================
 
+const FLOW_SPEEDS = { slow: 700, medium: 250, fast: 60 };
+
+// =============================================================================
+// Settings panel — live editors for layout / color / stroke / CSS tokens
+// =============================================================================
+
+const SETTINGS_GROUPS = [
+  {
+    label: 'Spacing & gaps',
+    keys: ['ROW_GAP', 'COL_GAP', 'CONTAINER_GAP', 'NECK_Y_OFFSET_FOOT', 'NECK_Y_OFFSET_BODY', 'DETECT_GAP'],
+  },
+  {
+    label: 'Node & container',
+    keys: ['NODE_W', 'NODE_H', 'COL_TOP', 'CONTAINER_PAD', 'CONTAINER_PAD_T'],
+  },
+  {
+    label: 'Edge tails',
+    keys: ['H_ENTRY', 'H_EXIT', 'V_ENTRY', 'V_EXIT'],
+  },
+  {
+    label: 'Edge stroke',
+    keys: ['EDGE_STROKE_DEFAULT', 'EDGE_STROKE_FOCUSED'],
+    step: 0.1,
+  },
+];
+
+const SETTINGS_COLORS = [
+  'ACCENT_COLOR', 'EDGE_COLOR_DEFAULT', 'EDGE_COLOR_DIMMED', 'EDGE_COLOR_FOCUSED',
+];
+
+// CSS variables on :root we let the user retint live.
+const CSS_TOKENS = [
+  { name: '--bg',       label: 'Page bg' },
+  { name: '--bg-tint',  label: 'Section bg' },
+  { name: '--ink',      label: 'Text' },
+  { name: '--ink-2',    label: 'Text (2)' },
+  { name: '--ink-3',    label: 'Text (3)' },
+  { name: '--line',     label: 'Line' },
+  { name: '--accent',   label: 'Accent (CSS)' },
+];
+
+function readCssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function SettingsPanel({ rev, bump, onClose }) {
+  const LS = window.YVV2.LAYOUT_SETTINGS;
+  const DEF = window.YVV2.LAYOUT_SETTINGS_DEFAULTS;
+
+  const setNum = (key, raw) => {
+    const v = parseFloat(raw);
+    if (Number.isFinite(v)) {
+      LS[key] = v;
+      bump();
+    }
+  };
+  const setStr = (key, val) => {
+    LS[key] = val;
+    bump();
+  };
+  const setCssVar = (name, val) => {
+    document.documentElement.style.setProperty(name, val);
+    bump();
+  };
+
+  const reset = () => {
+    Object.keys(DEF).forEach(k => { LS[k] = DEF[k]; });
+    // Reset CSS variables (just remove inline overrides so :root takes over).
+    CSS_TOKENS.forEach(t => document.documentElement.style.removeProperty(t.name));
+    document.documentElement.style.removeProperty('--brochure-thumb-scale');
+    document.documentElement.style.removeProperty('--scale-grid-cell-scale');
+    bump();
+  };
+
+  return (
+    <aside className="settings-panel">
+      <header className="settings-header">
+        <strong>Settings</strong>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="settings-reset" onClick={reset} title="Reset all settings to defaults">reset</button>
+          <button className="close-btn" onClick={onClose} aria-label="Close">×</button>
+        </div>
+      </header>
+
+      <div className="settings-body">
+        {SETTINGS_GROUPS.map(group => (
+          <div key={group.label} className="settings-group">
+            <div className="settings-group-label">{group.label}</div>
+            {group.keys.map(k => (
+              <div key={k} className="settings-row">
+                <label>{k}</label>
+                <input
+                  type="number"
+                  step={group.step || 1}
+                  value={LS[k]}
+                  onChange={(e) => setNum(k, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        ))}
+
+        <div className="settings-group">
+          <div className="settings-group-label">Colors (SVG)</div>
+          {SETTINGS_COLORS.map(k => (
+            <div key={k} className="settings-row">
+              <label>{k}</label>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  type="color"
+                  value={LS[k]}
+                  onChange={(e) => setStr(k, e.target.value)}
+                />
+                <input
+                  type="text"
+                  value={LS[k]}
+                  onChange={(e) => setStr(k, e.target.value)}
+                  style={{ width: 84 }}
+                />
+              </div>
+            </div>
+          ))}
+          <div className="settings-row">
+            <label>CONTAINER_DASH</label>
+            <input
+              type="text"
+              value={LS.CONTAINER_DASH}
+              onChange={(e) => setStr('CONTAINER_DASH', e.target.value)}
+              style={{ width: 84 }}
+              title="SVG strokeDasharray (e.g. '4 4' or '6 3')"
+            />
+          </div>
+        </div>
+
+        <div className="settings-group">
+          <div className="settings-group-label">CSS tokens</div>
+          {CSS_TOKENS.map(t => {
+            const val = readCssVar(t.name);
+            const isColor = val.startsWith('#') || val.startsWith('rgb');
+            return (
+              <div key={t.name} className="settings-row">
+                <label>{t.label} <code>{t.name}</code></label>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {isColor && (
+                    <input type="color" value={val.length === 7 ? val : '#000000'}
+                      onChange={(e) => setCssVar(t.name, e.target.value)} />
+                  )}
+                  <input type="text" defaultValue={val}
+                    onBlur={(e) => setCssVar(t.name, e.target.value)}
+                    style={{ width: 96 }} />
+                </div>
+              </div>
+            );
+          })}
+          <div className="settings-row">
+            <label>Brochure thumb scale</label>
+            <input
+              type="number" step="0.05" min="0.3" max="1.2"
+              defaultValue={readCssVar('--brochure-thumb-scale') || 0.7}
+              onChange={(e) => setCssVar('--brochure-thumb-scale', e.target.value)}
+            />
+          </div>
+          <div className="settings-row">
+            <label>Scale-grid cell scale</label>
+            <input
+              type="number" step="0.05" min="0.3" max="1.2"
+              defaultValue={readCssVar('--scale-grid-cell-scale') || 0.7}
+              onChange={(e) => setCssVar('--scale-grid-cell-scale', e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
 function AppV2() {
   const [hover, setHover] = useState(null);
   const [lastActive, setLastActive] = useState(null);  // sticky for the overlay
@@ -511,6 +1021,84 @@ function AppV2() {
   const [expandedCount, setExpandedCount] = useState(0);
   const onExpandedCountChange = useCallback((n) => setExpandedCount(n), []);
   const panelRef = useRef(null);
+
+  // Play-flow state — drives the floating overlay through every visible node.
+  const [visibleOrder, setVisibleOrder] = useState([]);
+  const [playing, setPlaying] = useState(null);   // current payload, or null
+  const [speedKey, setSpeedKey] = useState('medium');
+  const playTimerRef = useRef(null);
+  const playStopRef = useRef(false);
+
+  // Settings panel — rev counter forces GraphV2 useMemo to recompute when
+  // any setting changes (the layout/graph code reads from window.YVV2.LAYOUT_SETTINGS
+  // at call time, so we just need to invalidate the memo).
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsRev, setSettingsRev] = useState(0);
+  const bumpSettings = useCallback(() => setSettingsRev(r => r + 1), []);
+
+  // Theme (light / dark) — applied as data-theme on <html> so the CSS overrides
+  // in yolovexv2.html flip every surface var. Also nudges a few SVG colors
+  // (edge defaults) to a darker shade so they stay legible on the dark canvas.
+  const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'light');
+  const toggleTheme = useCallback(() => {
+    setTheme(prev => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      const LS = window.YVV2.LAYOUT_SETTINGS;
+      const DEF = window.YVV2.LAYOUT_SETTINGS_DEFAULTS;
+      if (next === 'dark') {
+        LS.EDGE_COLOR_DEFAULT = '#64748b';
+        LS.EDGE_COLOR_DIMMED  = '#334155';
+      } else {
+        LS.EDGE_COLOR_DEFAULT = DEF.EDGE_COLOR_DEFAULT;
+        LS.EDGE_COLOR_DIMMED  = DEF.EDGE_COLOR_DIMMED;
+      }
+      setSettingsRev(r => r + 1);
+      return next;
+    });
+  }, []);
+
+  const onVisibleOrderChange = useCallback((order) => setVisibleOrder(order), []);
+
+  const stopPlay = useCallback(() => {
+    playStopRef.current = true;
+    if (playTimerRef.current) {
+      clearTimeout(playTimerRef.current);
+      playTimerRef.current = null;
+    }
+    setPlaying(null);
+  }, []);
+
+  const startPlay = useCallback(() => {
+    if (!visibleOrder.length) return;
+    playStopRef.current = false;
+    const tickMs = FLOW_SPEEDS[speedKey] || FLOW_SPEEDS.medium;
+    let i = 0;
+    const step = () => {
+      if (playStopRef.current) return;
+      if (i >= visibleOrder.length) {
+        // Park on the final frame (Detect → annotated image) — flow ends here
+        // and the overlay persists until the user hovers another node or hits Play again.
+        setPlaying(null);
+        return;
+      }
+      const payload = visibleOrder[i];
+      setPlaying(payload);
+      setLastActive(payload);
+      i += 1;
+      playTimerRef.current = setTimeout(step, tickMs);
+    };
+    step();
+  }, [visibleOrder, speedKey]);
+
+  // Stop playback if the user hovers any block (gives them control back).
+  useEffect(() => {
+    if (playing && hover && (hover.idx !== playing.idx || hover.pathKey !== playing.pathKey)) {
+      stopPlay();
+    }
+  }, [hover, playing, stopPlay]);
+
+  useEffect(() => () => stopPlay(), [stopPlay]);
 
   // Wrap setHover to persist the last non-null hover for the floating overlay,
   // so unhovering doesn't snap back to the input image.
@@ -540,6 +1128,11 @@ function AppV2() {
       // Don't close when the click is on a node — that click will fire onSelect
       // and may pick a different node; the resulting state update handles it.
       if (e.target.closest && e.target.closest('[data-node]')) return;
+      // Clicks inside the Settings panel shouldn't dismiss the detail panel —
+      // makes it possible to tune settings live while watching the panel react.
+      if (e.target.closest && e.target.closest('.settings-panel')) return;
+      // Same for the header (flow controls / settings toggle) and flow overlay.
+      if (e.target.closest && (e.target.closest('.app-header') || e.target.closest('.flow-overlay'))) return;
       setSelected(null);
     };
     document.addEventListener('mousedown', onDown);
@@ -560,6 +1153,30 @@ function AppV2() {
         <strong>yolovex</strong>
         <span className="divider">/</span>
         <span className="subtitle">YOLO26 · architecture + activations</span>
+        <div className="flow-controls">
+          <button
+            className="flow-btn"
+            onClick={() => (playing ? stopPlay() : startPlay())}
+            title={playing ? 'Stop flow' : 'Play flow — traverse all visible blocks'}
+          >
+            {playing ? '■ Stop' : '▶ Play flow'}
+          </button>
+          <span className="flow-speed">
+            {Object.keys(FLOW_SPEEDS).map(k => (
+              <button
+                key={k}
+                className={`flow-speed-btn ${speedKey === k ? 'active' : ''}`}
+                onClick={() => setSpeedKey(k)}
+              >{k}</button>
+            ))}
+          </span>
+          <span className="flow-count">{visibleOrder.length} steps</span>
+        </div>
+        <button
+          className="settings-toggle"
+          onClick={() => setSettingsOpen(o => !o)}
+          title="Open layout / color settings"
+        >⚙ settings</button>
         <span className="hint">
           {expandedCount > 0
             ? `${expandedCount} block${expandedCount === 1 ? '' : 's'} expanded · click for activations · shift+click to collapse`
@@ -570,12 +1187,20 @@ function AppV2() {
         <window.YVV2.GraphV2
           hover={hover}
           selected={selected}
+          playing={playing}
           onHover={onHover}
           onSelect={onSelect}
           onExpandedCountChange={onExpandedCountChange}
+          onVisibleOrderChange={onVisibleOrderChange}
+          settingsRev={settingsRev}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
-        <FlowOverlayV2 active={hover || selected} lastActive={lastActive} />
+        <FlowOverlayV2 active={playing || hover || selected} lastActive={lastActive} />
         <DetailPanelV2 selected={selected} onClose={() => setSelected(null)} panelRef={panelRef} />
+        {settingsOpen && (
+          <SettingsPanel rev={settingsRev} bump={bumpSettings} onClose={() => setSettingsOpen(false)} />
+        )}
       </main>
     </div>
   );

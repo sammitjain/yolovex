@@ -19,6 +19,38 @@
       --accent: #fb923c;
       --shadow-sm: 0 1px 2px rgba(15,23,42,.04);
       --shadow-md: 0 8px 24px rgba(15,23,42,.08);
+
+      /* Surfaces that aren't pure --bg (graph canvas, panel chrome, etc.). */
+      --panel: #ffffff;
+      --graph-bg: #f8fafc;
+      --code-bg: var(--bg-tint);
+
+      /* Top-16 channel brochure thumbs — multiplies the grid width.
+         0.7 = 30% smaller. Tweak between 0.5 and 1.0.
+         (Only the thumb grid scales; the main pinned preview stays as-is.) */
+      --brochure-thumb-scale: 0.6;
+
+      /* Detect panel — per-class score grid cell size (ported from L1).
+         0.7 = 30% smaller cells than L1's defaults. */
+      --scale-grid-cell-scale: 0.7;
+    }
+
+    /* Dark theme — applied with data-theme="dark" on <html>. Designed so the
+       SVG node fills (light pastels from arch-v2) still pop against the
+       darker canvas; the chrome and panels go dark. */
+    html[data-theme="dark"] {
+      --bg: #0f172a;
+      --bg-tint: #1e293b;
+      --ink: #f1f5f9;
+      --ink-2: #cbd5e1;
+      --ink-3: #94a3b8;
+      --ink-4: #64748b;
+      --line: #334155;
+      --line-2: #475569;
+      --panel: #1e293b;
+      --graph-bg: #0b1220;
+      --code-bg: #0b1220;
+      --shadow-md: 0 8px 24px rgba(0,0,0,.45);
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body, #root { height: 100%; }
@@ -36,18 +68,45 @@
       align-items: baseline;
       gap: 10px;
       padding: 10px 18px;
-      background: #ffffff;
-      border-bottom: 1px solid #e2e8f0;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
       font-size: 14px;
+      color: var(--ink);
     }
     .app-header strong { font-size: 15px; }
-    .app-header .divider { color: #cbd5e1; }
-    .app-header .subtitle { color: #475569; }
+    .app-header .divider { color: var(--line-2); }
+    .app-header .subtitle { color: var(--ink-2); }
     .app-header .hint {
       margin-left: auto;
-      color: #94a3b8;
+      color: var(--ink-4);
       font-size: 12px;
       font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+    .flow-controls {
+      display: flex; align-items: center; gap: 8px;
+      margin-left: 20px;
+    }
+    .flow-btn {
+      padding: 4px 10px; font-size: 12px; font-weight: 600;
+      border: 1px solid var(--line); background: var(--panel);
+      color: var(--ink); border-radius: 6px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .flow-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .flow-speed { display: flex; gap: 2px; }
+    .flow-speed-btn {
+      padding: 3px 7px; font-size: 11px;
+      border: 1px solid var(--line); background: var(--panel);
+      color: var(--ink-3); border-radius: 4px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .flow-speed-btn.active {
+      background: var(--accent); color: white;
+      border-color: var(--accent);
+    }
+    .flow-count {
+      font-size: 11px; color: var(--ink-4);
+      font-family: 'IBM Plex Mono', monospace;
     }
 
     .app-main { flex: 1; position: relative; overflow: hidden; }
@@ -58,7 +117,7 @@
       position: relative;
       overflow: hidden;
       user-select: none;
-      background: #f8fafc;
+      background: var(--graph-bg);
     }
 
     .zoom-controls {
@@ -72,27 +131,34 @@
     .zoom-controls button {
       width: 32px;
       height: 32px;
-      border: 1px solid #e2e8f0;
-      background: #ffffff;
+      border: 1px solid var(--line);
+      background: var(--panel);
       border-radius: 8px;
       font-size: 16px;
       cursor: pointer;
-      color: #475569;
+      color: var(--ink-2);
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
     }
-    .zoom-controls button:hover { background: #f1f5f9; }
+    .zoom-controls button:hover { background: var(--bg-tint); color: var(--ink); }
     .zoom-controls .fit-btn { font-size: 14px; }
+    .zoom-controls .theme-btn { font-size: 14px; }
 
     /* ============== FLOATING OVERLAY (hover-driven) ============== */
     .flow-overlay {
       position: absolute; top: 14px; right: 14px;
       width: 256px;     /* tweak me — overlay tile size; aspect ratio is auto */
-      background: rgba(255,255,255,0.96);
+      background: var(--panel);
       backdrop-filter: blur(6px);
       border: 1px solid var(--line); border-radius: 10px;
       box-shadow: var(--shadow-md);
       padding: 10px; pointer-events: none; z-index: 5;
       transition: border-color 200ms;
+    }
+    .flow-overlay.using-fallback {
+      border-style: dashed; border-color: var(--ink-4);
+    }
+    .flow-overlay.using-fallback .flow-overlay__sub {
+      color: var(--ink-3); font-style: italic;
     }
     .flow-overlay__frame {
       position: relative; width: 100%;
@@ -121,7 +187,7 @@
     .detail-panel {
       position: absolute; top: 0; right: 0; bottom: 0;
       width: 640px;     /* tweak me — side panel width */
-      background: white;
+      background: var(--panel);
       border-left: 1px solid var(--line);
       overflow-y: auto; z-index: 20;
       box-shadow: -8px 0 32px rgba(15,23,42,.06);
@@ -158,7 +224,7 @@
     }
     .close-btn {
       width: 28px; height: 28px; border-radius: 6px;
-      border: 1px solid var(--line); background: white;
+      border: 1px solid var(--line); background: var(--panel);
       color: var(--ink-3); font-size: 18px; line-height: 1; flex-shrink: 0;
     }
     .close-btn:hover { border-color: var(--ink-4); color: var(--ink); }
@@ -208,10 +274,12 @@
 
     .brochure-grid {
       display: grid; grid-template-columns: repeat(4, 1fr);
-      gap: 5px; flex: 1; align-content: start;
+      gap: calc(5px * var(--brochure-thumb-scale));
+      width: calc(100% * var(--brochure-thumb-scale));
+      align-content: start;
     }
     .brochure-thumb {
-      position: relative; padding: 0; background: white;
+      position: relative; padding: 0; background: var(--panel);
       border: 1px solid var(--line); border-radius: 4px;
       cursor: pointer; overflow: hidden;
       transition: transform 120ms, border-color 120ms, box-shadow 120ms;
@@ -255,6 +323,221 @@
       padding: 14px; background: var(--bg-tint);
       border: 1px dashed var(--line-2); border-radius: 8px;
       color: var(--ink-3); font-size: 12.5px; line-height: 1.5;
+    }
+
+    /* ============== DETECT PANEL ============== */
+    .detect-conf-box {
+      margin-top: 12px; padding: 10px 12px;
+      background: var(--bg-tint); border-radius: 6px;
+      border: 1px solid var(--line);
+    }
+    .detect-conf-row {
+      display: flex; align-items: baseline; justify-content: space-between;
+      font-size: 12px; margin-bottom: 6px;
+    }
+    .detect-conf-row strong { color: var(--ink); font-weight: 600; }
+    .detect-conf-row .num {
+      font-family: 'IBM Plex Mono', monospace; color: var(--ink);
+    }
+    .detect-conf-controls {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .detect-conf-controls input[type="range"] {
+      flex: 1; cursor: pointer;
+    }
+    .detect-conf-controls input[type="number"] {
+      width: 88px; padding: 4px 6px; font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      border: 1px solid var(--line); border-radius: 4px;
+      background: var(--panel); color: var(--ink);
+    }
+    .detect-conf-stats {
+      font-size: 11px; color: var(--ink-2); margin-top: 6px;
+    }
+    .detect-conf-stats .muted { color: var(--ink-4); }
+    .detect-conf-bounds {
+      display: flex; justify-content: space-between;
+      font-size: 10px; color: var(--ink-4); margin-top: 2px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    /* Horizontal bar chart of final detections */
+    .det-bars { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+    .det-bar {
+      display: grid; grid-template-columns: 14px 110px 1fr 58px;
+      align-items: center; gap: 8px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    }
+    .det-bar .dot {
+      width: 10px; height: 10px; border-radius: 2px;
+    }
+    .det-bar .name {
+      font-weight: 600; color: var(--ink);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .det-bar .track {
+      position: relative; height: 14px;
+      background: var(--bg-tint); border-radius: 3px;
+      border: 1px solid var(--line); overflow: hidden;
+    }
+    .det-bar .fill {
+      position: absolute; left: 0; top: 0; bottom: 0;
+      border-radius: 2px 0 0 2px;
+      transition: width 160ms ease-out;
+    }
+    .det-bar .conf {
+      text-align: right; color: var(--ink-2); font-size: 11.5px;
+    }
+    .det-empty {
+      margin-top: 10px; font-size: 12px;
+      color: var(--ink-4); font-style: italic;
+    }
+
+    /* Per-class score grid (ported from L1) */
+    .scale-grid {
+      display: grid;
+      grid-template-columns: calc(88px * var(--scale-grid-cell-scale)) repeat(3, 1fr);
+      gap: calc(8px * var(--scale-grid-cell-scale));
+      background: var(--bg-tint);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: calc(12px * var(--scale-grid-cell-scale));
+      align-items: stretch;
+      width: calc(100% * var(--scale-grid-cell-scale));
+    }
+    .scale-grid-header {
+      font-size: 11px; font-weight: 600; color: var(--ink-3);
+      text-align: center; padding: 4px 0;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .scale-grid-header.first { text-align: left; padding-left: 4px; }
+    .scale-grid-header .sub {
+      display: block; font-weight: 400; color: var(--ink-4);
+      font-size: 10px; text-transform: none; letter-spacing: 0; margin-top: 1px;
+    }
+    .scale-grid-class {
+      display: flex; flex-direction: column; justify-content: center;
+      padding: 0 4px; font-size: 12px; color: var(--ink);
+    }
+    .scale-grid-class .cls-name { font-weight: 600; }
+    .scale-grid-class .cls-peak {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px; color: var(--ink-3); margin-top: 2px;
+    }
+    .scale-grid-cell {
+      position: relative; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 4px;
+      overflow: hidden; aspect-ratio: 3 / 4;
+      transition: border-color 120ms, box-shadow 120ms;
+    }
+    .scale-grid-cell.is-peak {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px rgba(251,146,60,.35);
+    }
+    .scale-grid-cell.faint { opacity: 0.55; }
+    .scale-grid-cell img {
+      display: block; width: 100%; height: 100%; object-fit: cover;
+    }
+    .scale-grid-cell .cell-score {
+      position: absolute; bottom: 3px; right: 3px;
+      background: rgba(15,23,42,.78); color: white;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9.5px; padding: 1px 4px;
+      border-radius: 2px; line-height: 1.4;
+    }
+    .scale-grid-imgrow {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: calc(88px * var(--scale-grid-cell-scale)) repeat(3, 1fr);
+      gap: calc(8px * var(--scale-grid-cell-scale));
+      align-items: stretch;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 6px;
+    }
+    .scale-grid-imgrow > div:first-child {
+      align-self: end; padding-bottom: 6px;
+    }
+    .scale-grid-imgrow .scale-ref {
+      width: 100%; aspect-ratio: 3 / 4; height: auto;
+      object-fit: cover; border-radius: 4px;
+      border: 1px solid var(--line);
+    }
+
+    .detect-classes-control {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--ink-2); margin-bottom: 12px;
+    }
+    .detect-classes-control input[type="number"] {
+      width: 56px; padding: 3px 6px; font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      border: 1px solid var(--line); border-radius: 4px;
+      background: var(--panel); color: var(--ink);
+    }
+
+    /* ============== SETTINGS PANEL ============== */
+    .settings-toggle {
+      margin-left: 12px; padding: 4px 10px;
+      font-size: 12px; font-weight: 500;
+      border: 1px solid var(--line); background: var(--panel);
+      color: var(--ink-2); border-radius: 6px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .settings-toggle:hover {
+      border-color: var(--accent); color: var(--accent);
+    }
+    .settings-panel {
+      position: absolute; top: 0; left: 0; bottom: 0;
+      width: 320px;
+      background: var(--panel); border-right: 1px solid var(--line);
+      box-shadow: 8px 0 32px rgba(15,23,42,.06);
+      overflow-y: auto; z-index: 30;
+      animation: panel-slide-in 280ms cubic-bezier(.16,1,.3,1);
+    }
+    .settings-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid var(--line);
+      position: sticky; top: 0; background: var(--panel); z-index: 1;
+    }
+    .settings-header strong { font-size: 14px; }
+    .settings-reset {
+      font-size: 11px; padding: 3px 8px;
+      border: 1px solid var(--line); border-radius: 4px;
+      background: var(--panel); color: var(--ink-2);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .settings-reset:hover { border-color: var(--accent); color: var(--accent); }
+    .settings-body { padding: 14px 18px; }
+    .settings-group {
+      margin-bottom: 18px; padding-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .settings-group:last-child { border-bottom: none; }
+    .settings-group-label {
+      font-size: 11px; color: var(--ink-3); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+    .settings-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; padding: 3px 0; font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .settings-row label { color: var(--ink-2); font-weight: 500; }
+    .settings-row label code {
+      font-size: 10px; color: var(--ink-4); margin-left: 4px;
+    }
+    .settings-row input[type="number"],
+    .settings-row input[type="text"] {
+      width: 72px; padding: 3px 6px; font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      border: 1px solid var(--line); border-radius: 4px;
+      background: var(--panel); color: var(--ink); text-align: right;
+    }
+    .settings-row input[type="color"] {
+      width: 32px; height: 24px; padding: 0;
+      border: 1px solid var(--line); border-radius: 4px;
+      cursor: pointer; background: transparent;
     }
   </style>
 </head>

@@ -7,44 +7,56 @@
 // neck sits in columns 1-2.
 
 // ===================== TUNABLE SPACING — tweak these ======================
-// Everything that controls how the canvas is spaced out lives here.
-const ROW_GAP        = 100;  // vertical gap between consecutive blocks in a column
-const COL_GAP        = 360;  // horizontal gap between the two neck columns (FPN-up / PAN-down)
-const CONTAINER_GAP  = 100;  // uniform horizontal gap between the Backbone | Neck | Head containers
-const NECK_Y_OFFSET  = 10;  // how far down the whole neck region sits — breathing room below the backbone
-const DETECT_GAP     = 100;   // vertical gap between the P3 / P4 / P5 detect boxes (taller Head container)
+// All layout constants live in window.YVV2.LAYOUT_SETTINGS — a mutable object
+// the Settings panel can edit at runtime. The module-level constants below
+// are kept as DEFAULTS only; layout functions read from the live settings on
+// every invocation, so changes propagate after a re-render.
+const LAYOUT_SETTINGS_DEFAULTS = {
+  ROW_GAP:        100,  // vertical gap between consecutive blocks in a column
+  COL_GAP:        360,  // horizontal gap between the two neck columns (FPN-up / PAN-down)
+  CONTAINER_GAP:  100,  // uniform horizontal gap between Backbone | Neck | Head containers
+  NECK_Y_OFFSET_FOOT: 0,   // shift only the col-0 neck blocks (SPPF 9, C2PSA 10) down
+  NECK_Y_OFFSET_BODY: 10,  // shift the col-1/col-2 neck body + Detect column down
+  NECK_Y_OFFSET:      10,  // legacy alias — body offset (kept so old settings don't crash)
+  DETECT_GAP:     100,  // vertical gap between the P3 / P4 / P5 detect boxes
+  H_ENTRY:        30,   // horizontal flat-tail out of the source
+  H_EXIT:         36,   // horizontal flat-tail into the target
+  V_ENTRY:        8,    // vertical flat-tail out of the source
+  V_EXIT:         14,   // vertical flat-tail into the target
+  NODE_W:         158,
+  NODE_H:         56,
+  COL_TOP:        80,
+  CONTAINER_PAD:  18,
+  CONTAINER_PAD_T: 28,
+  EDGE_STROKE_DEFAULT:  1.4,
+  EDGE_STROKE_FOCUSED:  2.2,
+  CONTAINER_DASH:       '4 4',
+  ACCENT_COLOR:         '#fb923c',
+  EDGE_COLOR_DEFAULT:   '#94a3b8',
+  EDGE_COLOR_DIMMED:    '#cbd5e1',
+  EDGE_COLOR_FOCUSED:   '#fb923c',
+};
 
-// Edge bezier flat-tail leads — each edge is a flat tail out of the source,
-// a short bend, then a flat tail into the target. Bigger lead = flatter edge
-// with a sharper corner. Horizontal applies to cross / skip / detect edges;
-// vertical applies to forward (same-column) edges.
-const H_ENTRY = 30;  // horizontal: flat tail leaving the source
-const H_EXIT  = 36;  // horizontal: flat tail entering the target
-const V_ENTRY = 8;   // vertical: flat tail leaving the source
-const V_EXIT  = 14;  // vertical: flat tail entering the target
-// ===========================================================================
+window.YVV2 = window.YVV2 || {};
+window.YVV2.LAYOUT_SETTINGS_DEFAULTS = LAYOUT_SETTINGS_DEFAULTS;
+if (!window.YVV2.LAYOUT_SETTINGS) {
+  window.YVV2.LAYOUT_SETTINGS = { ...LAYOUT_SETTINGS_DEFAULTS };
+}
+const S = () => window.YVV2.LAYOUT_SETTINGS;
 
-const NODE_W = 158;
-const NODE_H = 56;
-const COL_TOP = 80;
-
-const CONTAINER_PAD   = 18;
-const CONTAINER_PAD_T = 28;
-
-// Column x-positions. COL_X[0] is fixed; the rest are derived so the gaps
-// between the three role containers come out uniform (= CONTAINER_GAP), while
-// COL_GAP independently controls the spacing between the two neck columns.
-// With NODE_W=158, CONTAINER_PAD=18: backbone right edge = 296.
-//   neck-body-left = COL_X[1] - CONTAINER_PAD ; want = 296 + CONTAINER_GAP
-//      -> COL_X[1] = 314 + CONTAINER_GAP
-//   COL_X[2]   = COL_X[1] + COL_GAP
-//   head-left  = neck-right + CONTAINER_GAP   -> COL_X[3] = COL_X[2] + 194 + CONTAINER_GAP
-const COL_X = (() => {
-  const c1 = 314 + CONTAINER_GAP;
-  const c2 = c1 + COL_GAP;
-  const c3 = c2 + 194 + CONTAINER_GAP;
+// Column x-positions derived live from settings.
+function computeColX() {
+  const s = S();
+  // Original derivation (assumes NODE_W=158, CONTAINER_PAD=18 in the historical
+  // layout). Now generalised to derive from current settings so widening
+  // CONTAINER_GAP / changing NODE_W still keeps the role containers butted up
+  // with the requested uniform gap.
+  const backboneRightEdge = 120 + s.NODE_W + s.CONTAINER_PAD;
+  const c1 = backboneRightEdge + s.CONTAINER_GAP + s.CONTAINER_PAD;
+  const c2 = c1 + s.COL_GAP;
+  const c3 = c2 + (s.NODE_W + s.CONTAINER_PAD + s.CONTAINER_GAP + s.CONTAINER_PAD);
   return [120, c1, c2, c3];
-})();
+}
 
 // --- Node positions --------------------------------------------------------
 // Same column scheme as the original layout.jsx, plus NECK_Y_OFFSET which
@@ -59,10 +71,14 @@ const COL_X = (() => {
 //
 // Width: a region also grows rightward by `regionW - NODE_W`; every column to
 // the right of an expanded column is shifted right by the widest such delta.
-const GAP = ROW_GAP - NODE_H;   // actual visual gap between stacked boxes
-
 function layoutGraph(arch, expansionMap) {
   expansionMap = expansionMap || {};
+  const s = S();
+  const { ROW_GAP, NODE_W, NODE_H, COL_TOP, DETECT_GAP } = s;
+  const NECK_FOOT = s.NECK_Y_OFFSET_FOOT ?? 0;
+  const NECK_BODY = s.NECK_Y_OFFSET_BODY ?? s.NECK_Y_OFFSET ?? 0;
+  const GAP = ROW_GAP - NODE_H;
+  const COL_X = computeColX();
   const nodes = {};
   const exOf = idx => expansionMap[idx] || null;
 
@@ -93,7 +109,7 @@ function layoutGraph(arch, expansionMap) {
     let y = COL_TOP;
     let addedNeckOffset = false;
     arch.filter(b => b.col === 0).forEach(b => {
-      if (b.role === 'Neck' && !addedNeckOffset) { y += NECK_Y_OFFSET; addedNeckOffset = true; }
+      if (b.role === 'Neck' && !addedNeckOffset) { y += NECK_FOOT; addedNeckOffset = true; }
       nodes[b.idx] = mk(b, COL_X[0] + xShift[0], y);
       y += nodes[b.idx].h + GAP;
     });
@@ -105,7 +121,7 @@ function layoutGraph(arch, expansionMap) {
   // edge anchored and blocks below it (higher vpos) slide further down. The
   // internal sub-graph is still flipped (bottom-to-top), so the entry sub-node
   // sits at the region's bottom and connects cleanly to the predecessor below.
-  const fpnTop = COL_TOP + 1.5 * ROW_GAP + NECK_Y_OFFSET;
+  const fpnTop = COL_TOP + 1.5 * ROW_GAP + NECK_BODY;
   {
     const col1 = arch.filter(b => b.col === 1).sort((a, b) => a.vpos - b.vpos);
     let y = fpnTop;   // block with vpos=0 sits at the top
@@ -116,7 +132,7 @@ function layoutGraph(arch, expansionMap) {
   }
 
   // Column 2 (PAN-down): walked top-to-bottom from the same top.
-  const panTop = COL_TOP + 1.5 * ROW_GAP + NECK_Y_OFFSET;
+  const panTop = COL_TOP + 1.5 * ROW_GAP + NECK_BODY;
   {
     let y = panTop;
     arch.filter(b => b.col === 2).forEach(b => {
@@ -129,7 +145,9 @@ function layoutGraph(arch, expansionMap) {
   // with DETECT_GAP between them. The node's `detect` array carries each
   // box's vertical offset; `h` spans all three so the Head container wraps
   // them. Nothing is stretched — every box is NODE_W x NODE_H like the rest.
-  const colSpan = COL_TOP + 10 * ROW_GAP + NECK_Y_OFFSET + NODE_H;  // bottom of block 10
+  // Bottom of the col-0 stack (block 10) — the foot offset shifts SPPF/C2PSA;
+  // Detect column centers vertically against this span.
+  const colSpan = COL_TOP + 10 * ROW_GAP + NECK_FOOT + NODE_H;
   const detect = arch.find(b => b.col === 3);
   if (detect) {
     const span = 3 * NODE_H + 2 * DETECT_GAP;
@@ -167,7 +185,7 @@ function detectPort(n, scale) {
   const boxes = n.detect || [];
   const box = boxes.find(b => b.scale === scale) || boxes[boxes.length - 1];
   const relY = box ? box.relY : 0;
-  return { x: n.x, y: n.y + relY + NODE_H / 2 };
+  return { x: n.x, y: n.y + relY + S().NODE_H / 2 };
 }
 
 // --- Ports for expanded blocks --------------------------------------------
@@ -267,6 +285,7 @@ function edgePaths(meta, nodes, arch) {
   const b = nodes[meta.dst];
   const from = arch[meta.src];
   const to = arch[meta.dst];
+  const { H_ENTRY, H_EXIT, V_ENTRY, V_EXIT } = S();
 
   if (meta.kind === 'detect') {
     const srcs = sourcePorts(meta, a, 'right');
@@ -362,6 +381,7 @@ function roundedPolyPath(pts, r) {
 // bounding box of its members with the top-left corner notched out (that
 // corner is where Backbone blocks 3-8 live).
 function computeContainers(arch, nodes) {
+  const { CONTAINER_PAD, CONTAINER_PAD_T } = S();
   const byRole = { Backbone: [], Neck: [], Head: [] };
   arch.forEach(b => byRole[b.role].push(b.idx));
 
@@ -440,5 +460,6 @@ window.YVV2.edgePath = edgePath;
 window.YVV2.edgePaths = edgePaths;
 window.YVV2.computeContainers = computeContainers;
 window.YVV2.detectPort = detectPort;
-window.YVV2.NODE_W = NODE_W;
-window.YVV2.NODE_H = NODE_H;
+// Live getters — graph-v2 reads these at render time, so settings tweaks are picked up.
+Object.defineProperty(window.YVV2, 'NODE_W', { get: () => S().NODE_W, configurable: true });
+Object.defineProperty(window.YVV2, 'NODE_H', { get: () => S().NODE_H, configurable: true });
