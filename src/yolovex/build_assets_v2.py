@@ -31,16 +31,48 @@ import torch
 import torch.fx
 
 from .activations import capture_with_results
-from .build_assets import (
+from .rendering import (
     CHANNEL_MAX_DIM,
     CLASS_MAX_DIM,
     TOP_K_CHANNELS,
     _heatmap_to_b64,
 )
-from .build_assets_l2 import _preprocess_for_raw_forward
+from .preprocess import _preprocess_for_raw_forward
 from .block_spec import _trace_with_patches
 from .head import split_scores_by_scale
 from .model import DEFAULT_WEIGHTS, get_blocks, load_model
+
+ProgressCb = "Callable[[dict], None] | None"
+
+
+def _emit(progress, kind: str, **fields) -> None:
+    """Emit a progress event to optional callback AND stdout (one-line summary)."""
+    event = {"kind": kind, **fields}
+    if progress is not None:
+        try:
+            progress(event)
+        except Exception:
+            pass
+    # human-readable mirror for the CLI
+    if kind == "stage":
+        print(f"  [v2] stage: {fields.get('stage')}")
+    elif kind == "block":
+        idx = fields.get("idx")
+        total = fields.get("total")
+        cls = fields.get("type", "")
+        l1 = "+" if fields.get("l1") else "-"
+        sub = fields.get("sub", 0)
+        print(f"    [{idx:>2}/{total}] {cls:<10} L1{l1} sub={sub}")
+    elif kind == "detect_pass":
+        ok = "ok" if fields.get("ok") else "fail"
+        print(f"    [v2] detect pass {fields.get('pass')}: {ok}")
+    elif kind == "done":
+        print(
+            f"  [v2] done: {fields.get('n_blocks')} blocks, "
+            f"{fields.get('n_subs')} sub-nodes, skipped={fields.get('skipped')}"
+        )
+    elif kind == "error":
+        print(f"  [v2] error: {fields.get('message')}")
 
 # How many top classes (by overall peak score) to emit per scale in the Detect
 # payload. Frontend lets the user choose how many of these to actually render
@@ -121,6 +153,7 @@ def _build_detect_payload(
     weights: str,
     imgsz: int,
     top_k_classes: int = TOP_K_CLASSES_V2,
+    progress=None,
 ) -> dict | None:
     """Run an Ultralytics predict pass to harvest the Detect head's per-scale
     class score maps + survivors + low-conf candidate boxes.
@@ -155,7 +188,7 @@ def _build_detect_payload(
                 head_act = v
                 break
         if head_act is None:
-            print("  [v2] could not locate Detect head activation; skipping detect payload")
+            _emit(progress, "detect_pass", **{"pass": "main", "ok": False, "reason": "no_head_activation"})
             return None
 
         _preds, info = head_act
@@ -219,8 +252,9 @@ def _build_detect_payload(
         payload["nc"] = int(scores.shape[1])
         payload["names"] = {int(k): v for k, v in names.items()}
         payload["strides"] = [8, 16, 32]
+        _emit(progress, "detect_pass", **{"pass": "main", "ok": True, "boxes": len(payload["boxes"])})
     except Exception as e:
-        print(f"  [v2] detect main capture failed: {e.__class__.__name__}: {e}")
+        _emit(progress, "detect_pass", **{"pass": "main", "ok": False, "error": f"{e.__class__.__name__}: {e}"})
         return None
 
     # Pass 2: low-conf candidate boxes — separate predict at conf=0.001 to surface
@@ -246,22 +280,42 @@ def _build_detect_payload(
                 })
             candidate_boxes.sort(key=lambda b: b["conf"], reverse=True)
         payload["candidate_boxes"] = candidate_boxes
-        print(f"  [v2] detect: {len(payload['boxes'])} survivors, {len(candidate_boxes)} candidates")
+        _emit(progress, "detect_pass", **{
+            "pass": "candidates", "ok": True,
+            "survivors": len(payload["boxes"]), "candidates": len(candidate_boxes),
+        })
     except Exception as e:
-        print(f"  [v2] candidate-box capture failed (non-fatal): {e}")
+        _emit(progress, "detect_pass", **{"pass": "candidates", "ok": False, "error": str(e)})
         payload.setdefault("candidate_boxes", [])
 
     return payload
 
 
-def build(image_path: Path, weights: str = DEFAULT_WEIGHTS, imgsz: int = 640) -> dict:
-    print(f"  [v2] loading {weights}...")
+class BuildCancelled(Exception):
+    """Raised when a cancel flag trips between blocks."""
+
+
+def build(
+    image_path: Path,
+    weights: str = DEFAULT_WEIGHTS,
+    imgsz: int = 640,
+    progress=None,
+    cancel_check=None,
+) -> dict:
+    def _check_cancel():
+        if cancel_check is not None and cancel_check():
+            raise BuildCancelled()
+
+    _emit(progress, "stage", stage="load_model", weights=weights)
     yolo = load_model(weights)
     blocks = get_blocks(yolo)
+    _check_cancel()
 
+    _emit(progress, "stage", stage="preprocess", image=str(image_path), imgsz=imgsz)
     input_tensor = _preprocess_for_raw_forward(image_path, imgsz)
+    _check_cancel()
 
-    print(f"  [v2] running unfused forward to capture per-block inputs/outputs...")
+    _emit(progress, "stage", stage="forward", total_blocks=len(blocks))
     block_inputs, in_handles = _capture_block_inputs(blocks)
     block_outputs, out_handles = _capture_block_outputs(blocks)
     try:
@@ -270,23 +324,24 @@ def build(image_path: Path, weights: str = DEFAULT_WEIGHTS, imgsz: int = 640) ->
     finally:
         for h in in_handles + out_handles:
             h.remove()
+    _check_cancel()
 
     skipped: list[int] = []
     detect_indices: list[int] = []
     nodes_out: dict[str, dict] = {}
 
-    print(f"  [v2] re-interpreting each block's fx graph to harvest sub-activations...")
+    total = len(blocks)
+    _emit(progress, "stage", stage="fx_capture", total_blocks=total)
     for idx, block in enumerate(blocks):
+        _check_cancel()
         cls = type(block).__name__
         key = str(idx)
         entry: dict[str, Any] = {"type": cls, "output": None, "sub": {}}
 
         if cls == "Detect":
-            # Detect's fx graph isn't a clean 4-D in/out — handle it separately
-            # below (per-scale heatmaps + boxes + candidate_boxes).
             detect_indices.append(idx)
             nodes_out[key] = entry
-            print(f"    [{idx:>2}] {cls:<10} (detect payload built after main loop)")
+            _emit(progress, "block", idx=idx, total=total, type=cls, l1=False, sub=0, detect=True)
             continue
 
         # L1 output (always available from forward hook)
@@ -312,14 +367,16 @@ def build(image_path: Path, weights: str = DEFAULT_WEIGHTS, imgsz: int = 640) ->
                         entry["sub"][n.name] = rendered
                         sub_count += 1
             except Exception as e:
-                print(f"    [{idx:>2}] {cls:<10} fx trace/interp failed ({e.__class__.__name__}: {e}) — L1 only")
+                _emit(progress, "fx_fail", idx=idx, type=cls, error=f"{e.__class__.__name__}: {e}")
 
         nodes_out[key] = entry
-        print(f"    [{idx:>2}] {cls:<10} L1{'+' if l1_render else '-'} sub={sub_count}")
+        _emit(progress, "block", idx=idx, total=total, type=cls, l1=bool(l1_render), sub=sub_count)
 
     # Detect payload — single capture pass shared by all Detect blocks in the model.
     if detect_indices:
-        det = _build_detect_payload(image_path, weights, imgsz)
+        _check_cancel()
+        _emit(progress, "stage", stage="detect")
+        det = _build_detect_payload(image_path, weights, imgsz, progress=progress)
         if det is not None:
             for didx in detect_indices:
                 nodes_out[str(didx)]["detect"] = det

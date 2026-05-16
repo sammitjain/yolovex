@@ -36,7 +36,7 @@ import torch
 import torch.fx
 from torch.fx.passes.shape_prop import ShapeProp
 
-from .build_assets_l2 import _preprocess_for_raw_forward
+from .preprocess import _preprocess_for_raw_forward
 from .model import DEFAULT_WEIGHTS, get_blocks, load_model
 
 

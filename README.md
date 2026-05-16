@@ -29,10 +29,18 @@ You can drill into every block, peel it open down to the leaf modules (Conv2d, B
 ```bash
 uv sync
 uv run yolovex build-assets-v2           # captures activations on the default image
-open frontend/v2/yolovexv2.html          # or serve it any way you like
+uv run yolovex serve                     # http://127.0.0.1:8765/ — with 📷 upload
+```
+
+Or, if you don't want to run a server, the explorer also works as plain static HTML:
+
+```bash
+open frontend/v2/yolovexv2.html
 ```
 
 The first run auto-downloads `yolo26n.pt` via Ultralytics. The default image (`assets/sammit_lighthouse.jpg`) is bundled.
+
+When run via `yolovex serve`, the header gets a **📷 upload image** button: pick any image, watch the build progress (load model · preprocess · forward · capture sub-activations · detect head · write assets), and the activations refresh in place without a page reload.
 
 Once it's open:
 
@@ -65,10 +73,10 @@ uv run yolovex report          # one-page HTML report you can share
 ## Layout
 
 ```
-src/yolovex/      # all the Python — model loading, fx tracing, activation capture, CLI
-frontend/v2/      # the interactive explorer (this is the one in the screenshots)
-frontend/         # earlier L1 / L2 iterations, still runnable
-assets/           # the default sample image
+src/yolovex/      # all the Python — model loading, fx tracing, activation capture, CLI, local server
+frontend/v2/      # the interactive explorer (HTML + jsx)
+frontend/         # generated payloads: spec-data.js (architecture) + activations-v2.js (per-image)
+assets/           # default sample image + uploaded images (uploads/)
 results/          # screenshots used in this README
 ```
 

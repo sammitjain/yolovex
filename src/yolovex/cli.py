@@ -237,60 +237,6 @@ def report(
     typer.echo(f"saved {out}")
 
 
-@app.command("build-assets")
-def build_assets_cmd(
-    image: Path = typer.Option(DEFAULT_IMAGE, "--image", "-i"),
-    imgsz: int = typer.Option(640, "--imgsz"),
-    weights: str = typer.Option(DEFAULT_WEIGHTS, "--weights", "-w"),
-    out: Path = typer.Option(Path("frontend/data.js"), "--out"),
-):
-    """Render activations + predictions to data.js consumed by the frontend."""
-    from .build_assets import build, write_data_js
-
-    if not image.exists():
-        typer.echo(f"image not found: {image}", err=True)
-        raise typer.Exit(code=2)
-    typer.echo(f"running inference on {image}...")
-    data = build(image, weights=weights, imgsz=imgsz)
-    write_data_js(data, out)
-    n_blocks = len(data["blocks"])
-    n_pngs = sum(len(b.get("channel_pngs", [])) for b in data["blocks"].values())
-    n_classes = sum(
-        len(s.get("classes", []))
-        for b in data["blocks"].values()
-        for s in (b.get("scales") or {}).values()
-    )
-    typer.echo(
-        f"saved {out} — {n_blocks} blocks, {n_pngs} channel PNGs, "
-        f"{n_classes} class PNGs, {out.stat().st_size // 1024} KB"
-    )
-
-
-@app.command("build-assets-l2")
-def build_assets_l2_cmd(
-    image: Path = typer.Option(DEFAULT_IMAGE, "--image", "-i"),
-    imgsz: int = typer.Option(640, "--imgsz"),
-    weights: str = typer.Option(DEFAULT_WEIGHTS, "--weights", "-w"),
-    out: Path = typer.Option(Path("frontend/data-l2.js"), "--out"),
-):
-    """Render sub-module activations to data-l2.js consumed by the L2 frontend page."""
-    from .build_assets_l2 import build as l2_build
-    from .build_assets import write_data_js
-
-    if not image.exists():
-        typer.echo(f"image not found: {image}", err=True)
-        raise typer.Exit(code=2)
-    typer.echo(f"running L2 inference on {image}...")
-    data = l2_build(image, weights=weights, imgsz=imgsz)
-    write_data_js(data, out)
-    n_blocks = len(data["blocks"])
-    n_pngs = sum(len(b.get("channel_pngs", [])) for b in data["blocks"].values())
-    typer.echo(
-        f"saved {out} — {n_blocks} entries (parent blocks + sub-nodes), "
-        f"{n_pngs} channel PNGs, {out.stat().st_size // 1024} KB"
-    )
-
-
 @app.command("build-assets-v2")
 def build_assets_v2_cmd(
     image: Path = typer.Option(DEFAULT_IMAGE, "--image", "-i"),
@@ -332,6 +278,19 @@ def graph(
     write_svg(nodes, edges, out)
     typer.echo("")
     typer.echo(f"saved {out}")
+
+
+@app.command()
+def serve(
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(8765, "--port"),
+    weights: str = typer.Option(DEFAULT_WEIGHTS, "--weights", "-w"),
+    imgsz: int = typer.Option(640, "--imgsz"),
+):
+    """Run the local v2 explorer with live image upload + asset rebuild."""
+    from .serve import run
+
+    run(host=host, port=port, weights=weights, imgsz=imgsz)
 
 
 if __name__ == "__main__":

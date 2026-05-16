@@ -7,6 +7,9 @@ out/
 handoff/
 yolovex-handoff.zip
 
+# runtime uploads (yolovex serve)
+assets/uploads/
+
 # python
 __pycache__/
 *.py[cod]

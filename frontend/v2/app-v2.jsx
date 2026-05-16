@@ -1106,6 +1106,142 @@ function SettingsPanel({ rev, bump, onClose }) {
   );
 }
 
+// ============================================================================
+// Server mode: detect `yolovex serve` and add an image-upload flow.
+// ============================================================================
+
+const BUILD_STAGES = [
+  { key: 'load_model',  label: 'Load model' },
+  { key: 'preprocess',  label: 'Preprocess image' },
+  { key: 'forward',     label: 'Forward pass' },
+  { key: 'fx_capture',  label: 'Capture sub-activations' },
+  { key: 'detect',      label: 'Detect head' },
+  { key: 'write',       label: 'Write assets' },
+];
+
+function useServerMode() {
+  // null = probing, true/false = result
+  const [serverMode, setServerMode] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/health', { cache: 'no-store' })
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { if (!cancelled) setServerMode(!!(j && j.ok)); })
+      .catch(() => { if (!cancelled) setServerMode(false); });
+    return () => { cancelled = true; };
+  }, []);
+  return serverMode;
+}
+
+// Reload activations-v2.js into window.YV_ACT without a page reload.
+async function reloadActivations() {
+  const res = await fetch('/activations-v2.js?t=' + Date.now(), { cache: 'no-store' });
+  if (!res.ok) throw new Error('failed to fetch updated activations');
+  const text = await res.text();
+  // The file is shaped `window.YV_ACT = {...};` — eval in global scope.
+  (0, eval)(text);
+}
+
+function UploadButton({ disabled, onPick }) {
+  const inputRef = useRef(null);
+  return (
+    <>
+      <button
+        className="settings-toggle upload-btn"
+        onClick={() => inputRef.current && inputRef.current.click()}
+        disabled={disabled}
+        title={disabled ? 'A build is already running' : 'Upload a custom image and regenerate activations'}
+      >📷 upload image</button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          const f = e.target.files && e.target.files[0];
+          if (f) onPick(f);
+          e.target.value = '';
+        }}
+      />
+    </>
+  );
+}
+
+function BuildProgressOverlay({ job, onClose, onRetry }) {
+  // job: { id, file, previewUrl, stages: {key: 'pending'|'active'|'done'}, blockIdx, blockTotal, status, error, doneInfo }
+  if (!job) return null;
+  const elapsed = ((Date.now() - job.startedAt) / 1000).toFixed(1);
+  return (
+    <div className="upload-overlay-backdrop">
+      <div className="upload-overlay">
+        <header className="upload-overlay-header">
+          <strong>
+            {job.status === 'done'    ? '✓ Build complete' :
+             job.status === 'error'   ? '✗ Build failed' :
+             job.status === 'cancelled' ? 'Build cancelled' :
+             'Building assets…'}
+          </strong>
+          <span className="upload-overlay-elapsed">{elapsed}s</span>
+          <button className="upload-overlay-close" onClick={onClose}>×</button>
+        </header>
+        <div className="upload-overlay-body">
+          <div className="upload-overlay-thumb">
+            <img src={job.previewUrl} alt="" />
+            <div className="upload-overlay-filename">{job.file?.name}</div>
+          </div>
+          <div className="upload-overlay-stages">
+            {BUILD_STAGES.map(s => {
+              const st = job.stages[s.key] || 'pending';
+              const isFx = s.key === 'fx_capture';
+              const label = isFx && job.blockTotal
+                ? `${s.label} (${job.blockIdx} / ${job.blockTotal})`
+                : s.label;
+              return (
+                <div key={s.key} className={`upload-overlay-stage ${st}`}>
+                  <span className="upload-overlay-stage-marker">
+                    {st === 'done' ? '✓' : st === 'active' ? '●' : '○'}
+                  </span>
+                  <span className="upload-overlay-stage-label">{label}</span>
+                  {isFx && job.blockTotal > 0 && st !== 'pending' && (
+                    <div className="upload-overlay-bar">
+                      <div
+                        className="upload-overlay-bar-fill"
+                        style={{ width: `${(100 * job.blockIdx / job.blockTotal).toFixed(1)}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {job.status === 'error' && (
+              <div className="upload-overlay-error">{job.error}</div>
+            )}
+            {job.status === 'done' && job.doneInfo && (
+              <div className="upload-overlay-done-summary">
+                {job.doneInfo.n_blocks} blocks · {job.doneInfo.n_subs} sub-nodes
+                {job.doneInfo.skipped && job.doneInfo.skipped.length > 0
+                  ? ` · skipped [${job.doneInfo.skipped.join(', ')}]`
+                  : ''}
+              </div>
+            )}
+          </div>
+        </div>
+        <footer className="upload-overlay-footer">
+          {(job.status === 'running' || job.status === 'queued') && (
+            <button className="upload-overlay-cancel" onClick={onClose}>Cancel</button>
+          )}
+          {job.status === 'error' && (
+            <button className="upload-overlay-retry" onClick={onRetry}>Retry</button>
+          )}
+          {(job.status === 'done' || job.status === 'error' || job.status === 'cancelled') && (
+            <button className="upload-overlay-close-btn" onClick={onClose}>Close</button>
+          )}
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function AppV2() {
   const [hover, setHover] = useState(null);
   const [lastActive, setLastActive] = useState(null);  // sticky for the overlay
@@ -1166,6 +1302,110 @@ function AppV2() {
   }, []);
 
   const onVisibleOrderChange = useCallback((order) => setVisibleOrder(order), []);
+
+  // ---- Server mode (yolovex serve): image upload + live progress ----------
+  const serverMode = useServerMode();
+  const [uploadJob, setUploadJob] = useState(null);
+  // dataRev bumps when activations are reloaded — used to force a remount of
+  // the graph so every consumer re-reads window.YV_ACT from scratch.
+  const [dataRev, setDataRev] = useState(0);
+  const lastFileRef = useRef(null);
+  const evtSrcRef = useRef(null);
+
+  const closeUpload = useCallback(() => {
+    if (evtSrcRef.current) { try { evtSrcRef.current.close(); } catch {} evtSrcRef.current = null; }
+    if (uploadJob && (uploadJob.status === 'running' || uploadJob.status === 'queued')) {
+      // Best-effort cancel
+      fetch(`/api/jobs/${uploadJob.id}`, { method: 'DELETE' }).catch(() => {});
+    }
+    setUploadJob(null);
+  }, [uploadJob]);
+
+  const startUpload = useCallback(async (file) => {
+    lastFileRef.current = file;
+    const previewUrl = URL.createObjectURL(file);
+    const startedAt = Date.now();
+    setUploadJob({
+      id: null, file, previewUrl, startedAt,
+      stages: {}, blockIdx: 0, blockTotal: 0,
+      status: 'queued', error: null, doneInfo: null,
+    });
+
+    const fd = new FormData();
+    fd.append('file', file);
+    let jobId;
+    try {
+      const r = await fetch('/api/upload', { method: 'POST', body: fd });
+      if (r.status === 409) {
+        setUploadJob(j => j && ({ ...j, status: 'error', error: 'Another build is already in progress.' }));
+        return;
+      }
+      if (!r.ok) {
+        const t = await r.text();
+        setUploadJob(j => j && ({ ...j, status: 'error', error: `Upload failed: ${t || r.statusText}` }));
+        return;
+      }
+      const body = await r.json();
+      jobId = body.job_id;
+      setUploadJob(j => j && ({ ...j, id: jobId, status: 'running' }));
+    } catch (e) {
+      setUploadJob(j => j && ({ ...j, status: 'error', error: 'Network error contacting server.' }));
+      return;
+    }
+
+    // Subscribe to SSE
+    const src = new EventSource(`/api/jobs/${jobId}/events`);
+    evtSrcRef.current = src;
+    src.onmessage = (msg) => {
+      let ev;
+      try { ev = JSON.parse(msg.data); } catch { return; }
+      setUploadJob(j => {
+        if (!j) return j;
+        const next = { ...j, stages: { ...j.stages } };
+        if (ev.kind === 'stage') {
+          // Mark the new stage active; previous active stages become done.
+          BUILD_STAGES.forEach(s => {
+            if (s.key === ev.stage) next.stages[s.key] = 'active';
+            else if (next.stages[s.key] === 'active') next.stages[s.key] = 'done';
+          });
+        } else if (ev.kind === 'block') {
+          next.blockIdx = (ev.idx || 0) + 1;
+          next.blockTotal = ev.total || next.blockTotal;
+          // Stay in fx_capture stage.
+          if (next.stages.fx_capture !== 'done') next.stages.fx_capture = 'active';
+        } else if (ev.kind === 'done') {
+          BUILD_STAGES.forEach(s => { next.stages[s.key] = 'done'; });
+          next.status = 'done';
+          next.doneInfo = ev;
+        } else if (ev.kind === 'error') {
+          next.status = 'error';
+          next.error = ev.message || 'Build failed';
+        } else if (ev.kind === 'cancelled') {
+          next.status = 'cancelled';
+        }
+        return next;
+      });
+      if (ev.kind === 'done') {
+        // Reload activations + force a graph remount so every consumer re-reads.
+        reloadActivations()
+          .then(() => setDataRev(r => r + 1))
+          .catch(e => {
+            setUploadJob(j => j && ({ ...j, status: 'error', error: 'Reload failed: ' + e.message }));
+          });
+        src.close();
+      } else if (ev.kind === 'error' || ev.kind === 'cancelled') {
+        src.close();
+      }
+    };
+    src.onerror = () => {
+      // EventSource auto-retries; we only treat this as terminal if the job is
+      // already past completion (in which case onmessage closed it).
+    };
+  }, []);
+
+  const retryUpload = useCallback(() => {
+    if (lastFileRef.current) startUpload(lastFileRef.current);
+  }, [startUpload]);
 
   const stopPlay = useCallback(() => {
     playStopRef.current = true;
@@ -1279,6 +1519,12 @@ function AppV2() {
           </span>
           <span className="flow-count">{visibleOrder.length} steps</span>
         </div>
+        {serverMode && (
+          <UploadButton
+            disabled={!!uploadJob && (uploadJob.status === 'running' || uploadJob.status === 'queued')}
+            onPick={startUpload}
+          />
+        )}
         <button
           className="settings-toggle"
           onClick={() => setSettingsOpen(o => !o)}
@@ -1292,6 +1538,7 @@ function AppV2() {
       </header>
       <main className="app-main">
         <window.YVV2.GraphV2
+          key={`graph-${dataRev}`}
           hover={hover}
           selected={selected}
           playing={playing}
@@ -1308,6 +1555,7 @@ function AppV2() {
         {settingsOpen && (
           <SettingsPanel rev={settingsRev} bump={bumpSettings} onClose={() => setSettingsOpen(false)} />
         )}
+        <BuildProgressOverlay job={uploadJob} onClose={closeUpload} onRetry={retryUpload} />
       </main>
     </div>
   );

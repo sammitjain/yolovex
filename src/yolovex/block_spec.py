@@ -40,7 +40,7 @@ import torch
 import torch.fx
 from torch.fx.passes.shape_prop import ShapeProp
 
-from .build_assets_l2 import _preprocess_for_raw_forward
+from .preprocess import _preprocess_for_raw_forward
 from .introspect import _shape_of, capture_block_input_shapes, structural_signature
 from .model import DEFAULT_WEIGHTS, get_blocks, load_model
 from .topology import _resolve_sources
