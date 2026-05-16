@@ -1,9 +1,9 @@
-// yolovex v2 — in-place block expansion.
+// yolovex — in-place block expansion.
 //
 // Self-contained port of the spec-graph machinery from frontend/spec-viewer.jsx
 // (preprocess / aggregate / staircase-detect / auto-layout / edge-routing),
 // plus buildExpansion() which turns one L1 block into a laid-out internal
-// component sub-graph ready to drop into the v2 canvas.
+// component sub-graph ready to drop into the canvas.
 //
 // Scope for now: depth-1 aggregation only (the "first decomposition" —
 // e.g. Conv -> conv/bn/act). Deeper/recursive expansion can layer on later.
@@ -763,7 +763,7 @@ function subEdgePath(edge, layout, stairs, nodesById) {
   };
 }
 
-// ===================== render styling (shared with graph-v2) ===============
+// ===================== render styling (shared with graph) ===============
 // Sub-kind palettes — one per theme. mod / module coordinate with the Conv
 // family (green); op is warm orange (matches accent hue); cat is amber; split
 // is blue. Dark variants mute the fills and keep borders bright enough to read.
@@ -785,8 +785,8 @@ const SUB_KIND_COLORS_DARK = {
   split:  { fill: '#16203e', border: '#3860a8', text: '#88b0e0' },
 };
 
-// Back-compat alias — any direct reference (or destructure from window.YVV2)
-// gets the light set. graph-v2's ExpandedNodeV2 switches to _DARK by theme prop.
+// Back-compat alias — any direct reference (or destructure from window.YV)
+// gets the light set. graph's ExpandedNode switches to _DARK by theme prop.
 const SUB_KIND_COLORS = SUB_KIND_COLORS_LIGHT;
 
 function subFormatShape(sh) {
@@ -1023,10 +1023,10 @@ function buildExpansion(idx, opts) {
   };
 }
 
-window.YVV2 = window.YVV2 || {};
-window.YVV2.buildExpansion       = buildExpansion;
-window.YVV2.SUB_KIND_COLORS      = SUB_KIND_COLORS_LIGHT;  // alias for back-compat
-window.YVV2.SUB_KIND_COLORS_LIGHT = SUB_KIND_COLORS_LIGHT;
-window.YVV2.SUB_KIND_COLORS_DARK  = SUB_KIND_COLORS_DARK;
-window.YVV2.subFormatShape       = subFormatShape;
-window.YVV2.opShortName          = opShortName;
+window.YV = window.YV || {};
+window.YV.buildExpansion       = buildExpansion;
+window.YV.SUB_KIND_COLORS      = SUB_KIND_COLORS_LIGHT;  // alias for back-compat
+window.YV.SUB_KIND_COLORS_LIGHT = SUB_KIND_COLORS_LIGHT;
+window.YV.SUB_KIND_COLORS_DARK  = SUB_KIND_COLORS_DARK;
+window.YV.subFormatShape       = subFormatShape;
+window.YV.opShortName          = opShortName;

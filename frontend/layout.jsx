@@ -1,13 +1,12 @@
-// yolovex v2 — pixel positions, role containers, and edge paths.
+// yolovex — pixel positions, role containers, and edge paths.
 //
-// Positions are ported verbatim from the original frontend/layout.jsx so v2
-// reproduces the exact yolovex.html canvas. New here: role-container shapes —
+// Role-container shapes —
 // Backbone/Head are plain rects, the Neck is a mirrored-L polygon because its
 // members (SPPF 9, C2PSA 10) sit in the backbone column while the rest of the
 // neck sits in columns 1-2.
 
 // ===================== TUNABLE SPACING — tweak these ======================
-// All layout constants live in window.YVV2.LAYOUT_SETTINGS — a mutable object
+// All layout constants live in window.YV.LAYOUT_SETTINGS — a mutable object
 // the Settings panel can edit at runtime. The module-level constants below
 // are kept as DEFAULTS only; layout functions read from the live settings on
 // every invocation, so changes propagate after a re-render.
@@ -37,19 +36,19 @@ const LAYOUT_SETTINGS_DEFAULTS = {
   EDGE_COLOR_FOCUSED:   '#c8682e',
 };
 
-window.YVV2 = window.YVV2 || {};
-window.YVV2.LAYOUT_SETTINGS_DEFAULTS = LAYOUT_SETTINGS_DEFAULTS;
-// arch-v2.jsx loads first and seeds LAYOUT_SETTINGS with palette keys; we fill
+window.YV = window.YV || {};
+window.YV.LAYOUT_SETTINGS_DEFAULTS = LAYOUT_SETTINGS_DEFAULTS;
+// arch.jsx loads first and seeds LAYOUT_SETTINGS with palette keys; we fill
 // any spacing / size / stroke defaults that aren't already present. Mutating
-// the EXISTING object (not replacing) is critical — arch-v2's palette proxies
+// the EXISTING object (not replacing) is critical — arch's palette proxies
 // would otherwise hold a stale reference and never see Settings-drawer edits.
-window.YVV2.LAYOUT_SETTINGS = window.YVV2.LAYOUT_SETTINGS || {};
+window.YV.LAYOUT_SETTINGS = window.YV.LAYOUT_SETTINGS || {};
 for (const k of Object.keys(LAYOUT_SETTINGS_DEFAULTS)) {
-  if (!(k in window.YVV2.LAYOUT_SETTINGS)) {
-    window.YVV2.LAYOUT_SETTINGS[k] = LAYOUT_SETTINGS_DEFAULTS[k];
+  if (!(k in window.YV.LAYOUT_SETTINGS)) {
+    window.YV.LAYOUT_SETTINGS[k] = LAYOUT_SETTINGS_DEFAULTS[k];
   }
 }
-const S = () => window.YVV2.LAYOUT_SETTINGS;
+const S = () => window.YV.LAYOUT_SETTINGS;
 
 // Column x-positions derived live from settings.
 function computeColX() {
@@ -286,7 +285,7 @@ function targetPorts(meta, b, side) {
 }
 
 // Returns an array of SVG path strings for one L1 edge. Multi-entry / multi-
-// exit expansions fan out — graph-v2 renders one path per element.
+// exit expansions fan out — graph renders one path per element.
 function edgePaths(meta, nodes, arch) {
   const a = nodes[meta.src];
   const b = nodes[meta.dst];
@@ -316,7 +315,7 @@ function edgePaths(meta, nodes, arch) {
 }
 
 // Back-compat: edgePath returns the first of edgePaths. Kept so the existing
-// graph-v2 call site keeps working if it doesn't switch to edgePaths.
+// graph call site keeps working if it doesn't switch to edgePaths.
 function edgePath(meta, nodes, arch) {
   return edgePaths(meta, nodes, arch)[0];
 }
@@ -460,13 +459,13 @@ function computeContainers(arch, nodes) {
   return out;
 }
 
-window.YVV2 = window.YVV2 || {};
-window.YVV2.layoutGraph = layoutGraph;
-window.YVV2.buildEdgeMeta = buildEdgeMeta;
-window.YVV2.edgePath = edgePath;
-window.YVV2.edgePaths = edgePaths;
-window.YVV2.computeContainers = computeContainers;
-window.YVV2.detectPort = detectPort;
-// Live getters — graph-v2 reads these at render time, so settings tweaks are picked up.
-Object.defineProperty(window.YVV2, 'NODE_W', { get: () => S().NODE_W, configurable: true });
-Object.defineProperty(window.YVV2, 'NODE_H', { get: () => S().NODE_H, configurable: true });
+window.YV = window.YV || {};
+window.YV.layoutGraph = layoutGraph;
+window.YV.buildEdgeMeta = buildEdgeMeta;
+window.YV.edgePath = edgePath;
+window.YV.edgePaths = edgePaths;
+window.YV.computeContainers = computeContainers;
+window.YV.detectPort = detectPort;
+// Live getters — graph reads these at render time, so settings tweaks are picked up.
+Object.defineProperty(window.YV, 'NODE_W', { get: () => S().NODE_W, configurable: true });
+Object.defineProperty(window.YV, 'NODE_H', { get: () => S().NODE_H, configurable: true });

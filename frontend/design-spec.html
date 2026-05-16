@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>yolovex v2 — Design System Spec</title>
+<title>yolovex — Design System Spec</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
 <style>
@@ -171,14 +171,14 @@ pre.cb {
      HEADER
 ══════════════════════════════════════════════════════════════ -->
 <header class="page-header">
-  <h1>yolovex v2 — design system</h1>
+  <h1>yolovex — design system</h1>
   <p class="sub">Visual redesign spec for the YOLO26n architecture explainer. Covers both light and dark themes end-to-end across all five source files.</p>
   <div class="chips">
-    <span class="chip">yolovexv2.html</span>
-    <span class="chip">arch-v2.jsx</span>
-    <span class="chip">expand-v2.jsx</span>
-    <span class="chip">graph-v2.jsx</span>
-    <span class="chip">app-v2.jsx</span>
+    <span class="chip">index.html</span>
+    <span class="chip">arch.jsx</span>
+    <span class="chip">expand.jsx</span>
+    <span class="chip">graph.jsx</span>
+    <span class="chip">app.jsx</span>
   </div>
 </header>
 
@@ -210,7 +210,7 @@ pre.cb {
      SURFACE TOKENS
 ══════════════════════════════════════════════════════════════ -->
 <spec-section>
-  <h2>Surface tokens — <code>yolovexv2.html</code></h2>
+  <h2>Surface tokens — <code>index.html</code></h2>
   <p class="section-intro">The page, panel, graph canvas, and text ramp. Light uses a warm near-white ground; dark uses deep navy-slate (not pure black, not indigo). One accent color, calibrated per theme.</p>
 
   <div class="token-pair">
@@ -256,7 +256,7 @@ pre.cb {
      BLOCK TYPE PALETTE
 ══════════════════════════════════════════════════════════════ -->
 <spec-section>
-  <h2>Block type palette — <code>arch-v2.jsx · TYPE_PALETTES</code></h2>
+  <h2>Block type palette — <code>arch.jsx · TYPE_PALETTES</code></h2>
   <p class="section-intro">Seven types, each with a distinct hue family. Light uses higher-chroma pastels (~88% lightness) for presence without glare. Dark uses deep mid-tone fills (~28–36%) with bright borders — "colored glass in low light", not neon.</p>
 
   <div class="palette-tabs">
@@ -503,7 +503,7 @@ pre.cb {
      ROLE + ACCENT
 ══════════════════════════════════════════════════════════════ -->
 <spec-section>
-  <h2>Role colors &amp; accent — <code>arch-v2.jsx · ROLE_PALETTES / ACCENTS</code></h2>
+  <h2>Role colors &amp; accent — <code>arch.jsx · ROLE_PALETTES / ACCENTS</code></h2>
   <p class="section-intro">Role containers are structural annotations (dashed outlines, 0.55 opacity) not fills — so these colors should read at low weight. Backbone/Neck/Head use distinct hue families that don't collide with any type hue. One warm amber accent serves: skip edges, selected ring, playing glow, brochure pinned, is-peak highlight.</p>
 
   <h3 style="margin-bottom:10px">Light mode</h3>
@@ -527,7 +527,7 @@ pre.cb {
      SUB-KIND PALETTE
 ══════════════════════════════════════════════════════════════ -->
 <spec-section>
-  <h2>Sub-kind palette — <code>expand-v2.jsx · SUB_KIND_COLORS</code></h2>
+  <h2>Sub-kind palette — <code>expand.jsx · SUB_KIND_COLORS</code></h2>
   <p class="section-intro">Colors for nodes inside expanded blocks. Currently a static light-only object — dark mode needs a parallel set. The light palette coordinates with block types (mod = same green family as Conv, op = warm orange, split = blue). Dark palette dims fills but keeps borders bright enough to read.</p>
 
   <h3>Light</h3>
@@ -595,7 +595,7 @@ pre.cb {
      STATE VOCABULARY
 ══════════════════════════════════════════════════════════════ -->
 <spec-section>
-  <h2>State vocabulary — <code>graph-v2.jsx</code></h2>
+  <h2>State vocabulary — <code>graph.jsx</code></h2>
   <p class="section-intro">Three states, three visual registers. Currently hover and selected share the orange glow — they need to be clearly separable at a glance.</p>
 
   <div class="demo-canvas" style="margin-bottom:20px">
@@ -675,7 +675,7 @@ pre.cb {
      NESTING DEPTH
 ══════════════════════════════════════════════════════════════ -->
 <spec-section>
-  <h2>Nesting depth — <code>graph-v2.jsx · ExpandedNodeV2</code></h2>
+  <h2>Nesting depth — <code>graph.jsx · ExpandedNode</code></h2>
   <p class="section-intro">The outermost expanded container inherits the block's type-color (dashed border at type.border, 0.4 opacity). Inner containers step through a neutral-cool purple gradient, progressively darker fill and denser dash — signaling depth without competing with the type palette. Use <code>ic.depth</code> to index the style table.</p>
 
   <div class="nest-pair">
@@ -763,9 +763,9 @@ pre.cb {
 
   <div class="code-files">
 
-    <!-- ── yolovexv2.html ── -->
+    <!-- ── index.html ── -->
     <details class="cf">
-      <summary><span class="arr">›</span> yolovexv2.html — CSS :root + dark override</summary>
+      <summary><span class="arr">›</span> index.html — CSS :root + dark override</summary>
       <pre class="cb"><span class="cm">/* Replace the existing :root and html[data-theme="dark"] blocks entirely. */</span>
 
 <span class="str">:root</span> <span class="pnc">{</span>
@@ -828,9 +828,9 @@ pre.cb {
 <span class="pnc">}</span></pre>
     </details>
 
-    <!-- ── arch-v2.jsx ── -->
+    <!-- ── arch.jsx ── -->
     <details class="cf">
-      <summary><span class="arr">›</span> arch-v2.jsx — TYPE_PALETTES, ROLE_PALETTES, ACCENTS</summary>
+      <summary><span class="arr">›</span> arch.jsx — TYPE_PALETTES, ROLE_PALETTES, ACCENTS</summary>
       <pre class="cb"><span class="cm">/* Replace the three palette objects entirely. */</span>
 
 <span class="kw">const</span> <span class="prop">TYPE_PALETTES</span> <span class="pnc">= {</span>
@@ -862,10 +862,10 @@ pre.cb {
 <span class="kw">const</span> <span class="prop">ACCENTS</span> <span class="pnc">= {</span> <span class="prop">light</span><span class="pnc">:</span> <span class="str">'#c8682e'</span><span class="pnc">,</span> <span class="prop">dark</span><span class="pnc">:</span> <span class="str">'#e07840'</span> <span class="pnc">};</span></pre>
     </details>
 
-    <!-- ── expand-v2.jsx ── -->
+    <!-- ── expand.jsx ── -->
     <details class="cf">
-      <summary><span class="arr">›</span> expand-v2.jsx — SUB_KIND_COLORS</summary>
-      <div class="cn">⚠️ SUB_KIND_COLORS is currently a static light-only object. To support both themes, replace it with two named constants and export both to <code>window.YVV2</code>. Then in <code>graph-v2.jsx · ExpandedNodeV2</code>, pick the set based on the <code>theme</code> prop (which needs threading through NodeV2 → ExpandedNodeV2).</div>
+      <summary><span class="arr">›</span> expand.jsx — SUB_KIND_COLORS</summary>
+      <div class="cn">⚠️ SUB_KIND_COLORS is currently a static light-only object. To support both themes, replace it with two named constants and export both to <code>window.YV</code>. Then in <code>graph.jsx · ExpandedNode</code>, pick the set based on the <code>theme</code> prop (which needs threading through Node → ExpandedNode).</div>
       <pre class="cb"><span class="cm">/* Replace the existing static SUB_KIND_COLORS object with two sets. */</span>
 
 <span class="kw">const</span> <span class="prop">SUB_KIND_COLORS_LIGHT</span> <span class="pnc">= {</span>
@@ -887,27 +887,27 @@ pre.cb {
 <span class="pnc">};</span>
 
 <span class="cm">/* Keep a single SUB_KIND_COLORS alias pointing at the light set for
-   backward compat with any direct reference — graph-v2 will switch dynamically. */</span>
+   backward compat with any direct reference — graph will switch dynamically. */</span>
 <span class="kw">const</span> <span class="prop">SUB_KIND_COLORS</span> <span class="pnc">=</span> <span class="prop">SUB_KIND_COLORS_LIGHT</span><span class="pnc">;</span>
 
-<span class="cm">/* Export both sets to YVV2 so graph-v2 can pick the right one at render time. */</span>
-<span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">.</span><span class="prop">SUB_KIND_COLORS</span>       <span class="pnc">=</span> <span class="prop">SUB_KIND_COLORS_LIGHT</span><span class="pnc">;</span>
-<span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">.</span><span class="prop">SUB_KIND_COLORS_LIGHT</span> <span class="pnc">=</span> <span class="prop">SUB_KIND_COLORS_LIGHT</span><span class="pnc">;</span>
-<span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">.</span><span class="prop">SUB_KIND_COLORS_DARK</span>  <span class="pnc">=</span> <span class="prop">SUB_KIND_COLORS_DARK</span><span class="pnc">;</span>
-<span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">.</span><span class="prop">subFormatShape</span>        <span class="pnc">=</span> <span class="prop">subFormatShape</span><span class="pnc">;</span></pre>
+<span class="cm">/* Export both sets to YV so graph can pick the right one at render time. */</span>
+<span class="prop">window</span><span class="pnc">.</span><span class="prop">YV</span><span class="pnc">.</span><span class="prop">SUB_KIND_COLORS</span>       <span class="pnc">=</span> <span class="prop">SUB_KIND_COLORS_LIGHT</span><span class="pnc">;</span>
+<span class="prop">window</span><span class="pnc">.</span><span class="prop">YV</span><span class="pnc">.</span><span class="prop">SUB_KIND_COLORS_LIGHT</span> <span class="pnc">=</span> <span class="prop">SUB_KIND_COLORS_LIGHT</span><span class="pnc">;</span>
+<span class="prop">window</span><span class="pnc">.</span><span class="prop">YV</span><span class="pnc">.</span><span class="prop">SUB_KIND_COLORS_DARK</span>  <span class="pnc">=</span> <span class="prop">SUB_KIND_COLORS_DARK</span><span class="pnc">;</span>
+<span class="prop">window</span><span class="pnc">.</span><span class="prop">YV</span><span class="pnc">.</span><span class="prop">subFormatShape</span>        <span class="pnc">=</span> <span class="prop">subFormatShape</span><span class="pnc">;</span></pre>
     </details>
 
-    <!-- ── graph-v2.jsx ── -->
+    <!-- ── graph.jsx ── -->
     <details class="cf">
-      <summary><span class="arr">›</span> graph-v2.jsx — SVG defs, NodeV2 states, inner containers, edge arrows, input node</summary>
+      <summary><span class="arr">›</span> graph.jsx — SVG defs, Node states, inner containers, edge arrows, input node</summary>
       <pre class="cb"><span class="cm">/* ── 1. Resolve SUB_KIND_COLORS by theme ──────────────────────────────── */</span>
-<span class="cm">/* In ExpandedNodeV2, replace: */</span>
-<span class="cm">/*   const { SUB_KIND_COLORS, subFormatShape } = window.YVV2;              */</span>
-<span class="cm">/* With (requires `theme` threaded through NodeV2 → ExpandedNodeV2 props): */</span>
+<span class="cm">/* In ExpandedNode, replace: */</span>
+<span class="cm">/*   const { SUB_KIND_COLORS, subFormatShape } = window.YV;              */</span>
+<span class="cm">/* With (requires `theme` threaded through Node → ExpandedNode props): */</span>
 <span class="kw">const</span> <span class="prop">SKC</span> <span class="pnc">=</span> <span class="prop">theme</span> <span class="pnc">=== </span><span class="str">'dark'</span>
-  <span class="pnc">?</span> <span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">.</span><span class="prop">SUB_KIND_COLORS_DARK</span>
-  <span class="pnc">:</span> <span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">.</span><span class="prop">SUB_KIND_COLORS_LIGHT</span><span class="pnc">;</span>
-<span class="kw">const</span> <span class="pnc">{</span> <span class="prop">subFormatShape</span> <span class="pnc">} =</span> <span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">;</span>
+  <span class="pnc">?</span> <span class="prop">window</span><span class="pnc">.</span><span class="prop">YV</span><span class="pnc">.</span><span class="prop">SUB_KIND_COLORS_DARK</span>
+  <span class="pnc">:</span> <span class="prop">window</span><span class="pnc">.</span><span class="prop">YV</span><span class="pnc">.</span><span class="prop">SUB_KIND_COLORS_LIGHT</span><span class="pnc">;</span>
+<span class="kw">const</span> <span class="pnc">{</span> <span class="prop">subFormatShape</span> <span class="pnc">} =</span> <span class="prop">window</span><span class="pnc">.</span><span class="prop">YV</span><span class="pnc">;</span>
 
 <span class="cm">/* ── 2. SVG &lt;defs&gt; — replace existing node-shadow and node-glow ──────── */</span>
 <span class="cm">/* Also thread EDGE_DEFAULT into arrow marker fills so they track the theme. */</span>
@@ -931,7 +931,7 @@ pre.cb {
   <span class="pnc">&lt;</span><span class="str">feDropShadow</span> <span class="prop">dx</span><span class="pnc">="0"</span> <span class="prop">dy</span><span class="pnc">="0"</span> <span class="prop">stdDeviation</span><span class="pnc">="11"</span> <span class="prop">floodColor</span><span class="pnc">={</span><span class="prop">ACCENT</span><span class="pnc">}</span> <span class="prop">floodOpacity</span><span class="pnc">="0.72"</span> <span class="pnc">/&gt;</span>
 <span class="pnc">&lt;/</span><span class="str">filter</span><span class="pnc">&gt;</span>
 
-<span class="cm">/* ── 3. NodeV2 — state rendering ─────────────────────────────────────── */</span>
+<span class="cm">/* ── 3. Node — state rendering ─────────────────────────────────────── */</span>
 <span class="cm">/* Replace the lift variable and the inner &lt;g&gt; / &lt;rect&gt; in the non-expanded path: */</span>
 
 <span class="cm">// Old: const lift = (playing && !node.expanded) ? 1.05 : (hovered ? 1.02 : 1);</span>
@@ -952,12 +952,12 @@ pre.cb {
 <span class="prop">stroke</span><span class="pnc">={(</span><span class="prop">selected</span> <span class="pnc">||</span> <span class="prop">playing</span><span class="pnc">)</span> <span class="pnc">?</span> <span class="prop">accent</span> <span class="pnc">:</span> <span class="prop">colorScheme</span><span class="pnc">.</span><span class="prop">border</span><span class="pnc">}</span>
 <span class="prop">strokeWidth</span><span class="pnc">={</span><span class="prop">playing</span> <span class="pnc">?</span> <span class="num">3</span> <span class="pnc">:</span> <span class="prop">selected</span> <span class="pnc">?</span> <span class="num">2.5</span> <span class="pnc">:</span> <span class="prop">hovered</span> <span class="pnc">?</span> <span class="num">2</span> <span class="pnc">:</span> <span class="num">1</span><span class="pnc">}</span>
 
-<span class="cm">// SubNodeV2 — rename glow reference:</span>
+<span class="cm">// SubNode — rename glow reference:</span>
 <span class="prop">filter</span><span class="pnc">:</span> <span class="prop">playing</span> <span class="pnc">?</span> <span class="str">'url(#node-playing)'</span> <span class="pnc">:</span> <span class="kw">undefined</span>
 
-<span class="cm">/* ── 4. Inner container chrome (ExpandedNodeV2) ───────────────────────── */</span>
+<span class="cm">/* ── 4. Inner container chrome (ExpandedNode) ───────────────────────── */</span>
 <span class="cm">/* Replace the single hardcoded fill/stroke with a depth-keyed lookup.
-   Pass `theme` prop through: NodeV2 → ExpandedNodeV2. */</span>
+   Pass `theme` prop through: Node → ExpandedNode. */</span>
 
 <span class="kw">const</span> <span class="prop">IC_STYLES</span> <span class="pnc">= {</span>
   <span class="prop">light</span><span class="pnc">: [</span>
@@ -972,7 +972,7 @@ pre.cb {
   <span class="pnc">],</span>
 <span class="pnc">};</span>
 
-<span class="cm">/* Usage in ExpandedNodeV2 (ic = one innerContainer record): */</span>
+<span class="cm">/* Usage in ExpandedNode (ic = one innerContainer record): */</span>
 <span class="kw">const</span> <span class="prop">ics</span> <span class="pnc">=</span> <span class="prop">IC_STYLES</span><span class="pnc">[</span><span class="prop">theme</span><span class="pnc">] ||</span> <span class="prop">IC_STYLES</span><span class="pnc">.</span><span class="prop">light</span><span class="pnc">;</span>
 <span class="kw">const</span> <span class="prop">s</span>   <span class="pnc">=</span> <span class="prop">ics</span><span class="pnc">[</span><span class="prop">Math</span><span class="pnc">.</span><span class="prop">min</span><span class="pnc">((</span><span class="prop">ic</span><span class="pnc">.</span><span class="prop">depth</span> <span class="pnc">||</span> <span class="num">1</span><span class="pnc">) -</span> <span class="num">1</span><span class="pnc">,</span> <span class="num">2</span><span class="pnc">)];</span>
 
@@ -984,16 +984,16 @@ pre.cb {
 <span class="cm">/* Label text fill — match stroke color for depth legibility: */</span>
 <span class="prop">fill</span><span class="pnc">={</span><span class="prop">s</span><span class="pnc">.</span><span class="prop">stroke</span><span class="pnc">}</span>
 
-<span class="cm">/* ── 5. Input image node (bottom of GraphV2 return) ─────────────────── */</span>
+<span class="cm">/* ── 5. Input image node (bottom of Graph return) ─────────────────── */</span>
 <span class="kw">const</span> <span class="prop">inputFill</span>    <span class="pnc">=</span> <span class="prop">theme</span> <span class="pnc">=== </span><span class="str">'dark'</span> <span class="pnc">?</span> <span class="str">'#1a2535'</span> <span class="pnc">:</span> <span class="str">'#f0ede8'</span><span class="pnc">;</span>
 <span class="kw">const</span> <span class="prop">inputStroke</span>  <span class="pnc">=</span> <span class="prop">theme</span> <span class="pnc">=== </span><span class="str">'dark'</span> <span class="pnc">?</span> <span class="str">'#304555'</span> <span class="pnc">:</span> <span class="str">'#c0bab2'</span><span class="pnc">;</span>
 <span class="kw">const</span> <span class="prop">inputText</span>    <span class="pnc">=</span> <span class="prop">theme</span> <span class="pnc">=== </span><span class="str">'dark'</span> <span class="pnc">?</span> <span class="str">'#5a7a96'</span> <span class="pnc">:</span> <span class="str">'#7a7470'</span><span class="pnc">;</span>
 <span class="cm">/* Use inputFill/inputStroke on the &lt;rect&gt; and inputText on both &lt;text&gt; nodes. */</span></pre>
     </details>
 
-    <!-- ── app-v2.jsx ── -->
+    <!-- ── app.jsx ── -->
     <details class="cf">
-      <summary><span class="arr">›</span> app-v2.jsx — theme toggle edge colors</summary>
+      <summary><span class="arr">›</span> app.jsx — theme toggle edge colors</summary>
       <pre class="cb"><span class="cm">/* In toggleTheme, replace the existing dark edge color assignments:
        LS.EDGE_COLOR_DEFAULT = '#64748b';
        LS.EDGE_COLOR_DIMMED  = '#334155';
@@ -1004,16 +1004,16 @@ pre.cb {
   <span class="prop">LS</span><span class="pnc">.</span><span class="prop">EDGE_COLOR_DIMMED</span>  <span class="pnc">=</span> <span class="str">'#1a2c40'</span><span class="pnc">;</span>  <span class="cm">// nearly-hidden dimmed</span>
   <span class="prop">LS</span><span class="pnc">.</span><span class="prop">EDGE_COLOR_FOCUSED</span> <span class="pnc">=</span> <span class="prop">LS</span><span class="pnc">.</span><span class="prop">ACCENT_COLOR</span><span class="pnc">;</span>
 <span class="pnc">} else {</span>
-  <span class="kw">const</span> <span class="prop">DEF</span> <span class="pnc">=</span> <span class="prop">window</span><span class="pnc">.</span><span class="prop">YVV2</span><span class="pnc">.</span><span class="prop">LAYOUT_SETTINGS_DEFAULTS</span><span class="pnc">;</span>
+  <span class="kw">const</span> <span class="prop">DEF</span> <span class="pnc">=</span> <span class="prop">window</span><span class="pnc">.</span><span class="prop">YV</span><span class="pnc">.</span><span class="prop">LAYOUT_SETTINGS_DEFAULTS</span><span class="pnc">;</span>
   <span class="prop">LS</span><span class="pnc">.</span><span class="prop">EDGE_COLOR_DEFAULT</span> <span class="pnc">=</span> <span class="prop">DEF</span><span class="pnc">.</span><span class="prop">EDGE_COLOR_DEFAULT</span><span class="pnc">;</span>
   <span class="prop">LS</span><span class="pnc">.</span><span class="prop">EDGE_COLOR_DIMMED</span>  <span class="pnc">=</span> <span class="prop">DEF</span><span class="pnc">.</span><span class="prop">EDGE_COLOR_DIMMED</span><span class="pnc">;</span>
   <span class="prop">LS</span><span class="pnc">.</span><span class="prop">EDGE_COLOR_FOCUSED</span> <span class="pnc">=</span> <span class="prop">LS</span><span class="pnc">.</span><span class="prop">ACCENT_COLOR</span><span class="pnc">;</span>
 <span class="pnc">}</span>
 
-<span class="cm">/* And update the light-mode defaults in layout-v2.jsx to match:
+<span class="cm">/* And update the light-mode defaults in layout.jsx to match:
    EDGE_COLOR_DEFAULT: '#9aa8b8',  (was '#94a3b8' or similar)
    EDGE_COLOR_DIMMED:  '#c4ccd8',
-   EDGE_COLOR_FOCUSED: ACCENT_COLOR (set at runtime after arch-v2 loads),
+   EDGE_COLOR_FOCUSED: ACCENT_COLOR (set at runtime after arch loads),
    EDGE_STROKE_DEFAULT: 1.2,
    EDGE_STROKE_FOCUSED: 2.0,
    CONTAINER_DASH: '6 4',          (role container outlines) */</span></pre>

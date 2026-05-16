@@ -1,12 +1,12 @@
-"""Local web server for the v2 explorer with live image upload.
+"""Local web server for the explorer with live image upload.
 
-Serves `frontend/v2/yolovexv2.html` plus its sibling assets, and exposes a
-small API for uploading a custom image, watching the build progress over SSE,
+Serves `frontend/index.html` plus its sibling assets, and exposes a small
+API for uploading a custom image, watching the build progress over SSE,
 and refreshing the activation payload without a hard reload.
 
-The build runs in a single background worker thread; only one job at a time.
-A second concurrent upload returns 409 — the UI is expected to disable the
-upload button while a job is in flight, this is just a defense.
+The build runs in a single background worker thread; only one job at a
+time. A second concurrent upload returns 409 — the UI is expected to
+disable the upload button while a job is in flight, this is just defense.
 """
 
 from __future__ import annotations
@@ -19,28 +19,25 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from .build_assets_v2 import BuildCancelled, build, write_activations_js
+from .build_assets import BuildCancelled, build, write_activations_js
 from .model import DEFAULT_WEIGHTS
 
 # ---------------------------------------------------------------------------
-# Paths (resolved relative to the project root = current working directory).
-# `yolovex serve` is expected to be run from the repo root, same as the other
-# CLI commands.
+# Paths (relative to the project root = current working directory).
+# `yolovex serve` is expected to be run from the repo root.
 # ---------------------------------------------------------------------------
 ROOT = Path.cwd()
 FRONTEND_DIR = ROOT / "frontend"
-V2_DIR = FRONTEND_DIR / "v2"
 ASSETS_DIR = ROOT / "assets"
 UPLOAD_DIR = ASSETS_DIR / "uploads"
-ACTIVATIONS_JS = FRONTEND_DIR / "activations-v2.js"
-SPEC_JS = FRONTEND_DIR / "spec-data.js"
+ACTIVATIONS_JS = FRONTEND_DIR / "activations.js"
+INDEX_HTML = FRONTEND_DIR / "index.html"
 
 ALLOWED_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
@@ -60,7 +57,7 @@ class Job:
 
 _state_lock = threading.Lock()
 _active_job: Job | None = None
-_recent_jobs: dict[str, Job] = {}  # keep a few recent for late SSE subscribers
+_recent_jobs: dict[str, Job] = {}  # late SSE subscribers can still find them
 
 
 def _set_active(job: Job | None) -> None:
@@ -77,7 +74,6 @@ def _get_active() -> Job | None:
 def _record_job(job: Job) -> None:
     with _state_lock:
         _recent_jobs[job.id] = job
-        # cap retention to ~5 jobs
         while len(_recent_jobs) > 5:
             _recent_jobs.pop(next(iter(_recent_jobs)))
 
@@ -98,7 +94,7 @@ def _worker(job: Job, weights: str, imgsz: int) -> None:
         return job.cancelled.is_set()
 
     # Pass the image as a project-root-relative path so meta.image renders
-    # correctly in the frontend (`'../' + meta.image` resolves against /v2/).
+    # correctly in the frontend (the explorer prepends '../' to it).
     try:
         rel_image = job.image_path.relative_to(ROOT)
     except ValueError:
@@ -113,8 +109,6 @@ def _worker(job: Job, weights: str, imgsz: int) -> None:
             cancel_check=cancel_check,
         )
         progress({"kind": "stage", "stage": "write"})
-        # Ensure meta.image is a forward-slashed, root-relative path — the
-        # frontend prepends '../' to it.
         try:
             data["meta"]["image"] = str(Path(data["meta"]["image"]).as_posix())
         except Exception:
@@ -148,26 +142,11 @@ def _worker(job: Job, weights: str, imgsz: int) -> None:
 def create_app(weights: str, imgsz: int) -> FastAPI:
     app = FastAPI(title="yolovex", docs_url=None, redoc_url=None)
 
-    # Static files. The frontend HTML uses relative paths like `../spec-data.js`
-    # and `../activations-v2.js` — when served from `/v2/yolovexv2.html`,
-    # those resolve to `/spec-data.js` and `/activations-v2.js`, which we mount
-    # explicitly so we can disable caching on `/activations-v2.js`.
-    app.mount("/v2", StaticFiles(directory=str(V2_DIR)), name="v2")
-    app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
-
-    @app.get("/")
-    def index():
-        # Redirect so relative script paths inside the HTML (../spec-data.js,
-        # arch-v2.jsx, etc.) resolve correctly against /v2/ as the base.
-        return RedirectResponse(url="/v2/yolovexv2.html", status_code=307)
-
-    @app.get("/spec-data.js")
-    def spec_js():
-        return FileResponse(SPEC_JS, media_type="application/javascript")
-
-    @app.get("/activations-v2.js")
+    # Activations file is rewritten on each upload — serve via an explicit
+    # route with cache-control set so the browser always sees the latest.
+    # Explicit routes win over StaticFiles mounts.
+    @app.get("/activations.js")
     def activations_js():
-        # No caching — this file is rewritten on each upload.
         return FileResponse(
             ACTIVATIONS_JS,
             media_type="application/javascript",
@@ -231,7 +210,6 @@ def create_app(weights: str, imgsz: int) -> FastAPI:
             raise HTTPException(status_code=404, detail="unknown job")
 
         async def stream():
-            # Reply quickly with a comment so the client confirms connection.
             yield ": connected\n\n"
             while True:
                 try:
@@ -253,15 +231,22 @@ def create_app(weights: str, imgsz: int) -> FastAPI:
             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"},
         )
 
+    # Uploaded images + the default sample image live here.
+    app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
+
+    # The whole explorer (index.html, *.jsx, spec-data.js, design-spec.html)
+    # is served from frontend/. `html=True` makes `GET /` serve index.html.
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
+
     return app
 
 
 def run(host: str = "127.0.0.1", port: int = 8765, weights: str = DEFAULT_WEIGHTS, imgsz: int = 640) -> None:
-    if not V2_DIR.exists():
-        raise SystemExit(f"frontend/v2 not found at {V2_DIR} — run `yolovex serve` from the repo root")
+    if not INDEX_HTML.exists():
+        raise SystemExit(f"{INDEX_HTML} not found — run `yolovex serve` from the repo root")
     if not ACTIVATIONS_JS.exists():
         print(
-            f"warning: {ACTIVATIONS_JS} doesn't exist yet — run `uv run yolovex build-assets-v2` "
+            f"warning: {ACTIVATIONS_JS} doesn't exist yet — run `uv run yolovex build-assets` "
             f"first, or upload an image once the server is up."
         )
     app = create_app(weights=weights, imgsz=imgsz)

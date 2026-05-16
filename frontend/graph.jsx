@@ -1,7 +1,7 @@
-// yolovex v2 — SVG graph: role containers, edges, block nodes. Pan / zoom /
+// yolovex — SVG graph: role containers, edges, block nodes. Pan / zoom /
 // hover interactivity ported from the original frontend/graph.jsx. Clicking a
-// block toggles in-place expansion (expand-v2.jsx builds the internal graph;
-// layout-v2.jsx slides neighbours aside to make room).
+// block toggles in-place expansion (expand.jsx builds the internal graph;
+// layout.jsx slides neighbours aside to make room).
 
 const { useState, useRef, useEffect, useMemo, useCallback } = React;
 
@@ -12,7 +12,7 @@ function formatShape(sh) {
   return null;
 }
 
-function GraphV2({ selected, hover, playing, onSelect, onHover, onExpandedCountChange, onVisibleOrderChange, settingsRev = 0, theme = 'light', onToggleTheme }) {
+function Graph({ selected, hover, playing, onSelect, onHover, onExpandedCountChange, onVisibleOrderChange, settingsRev = 0, theme = 'light', onToggleTheme }) {
   // L1-block id derived from the unified hover/select payload; the styling
   // logic below (edge dimming, lift, selected glow) is L1-only, so sub-node
   // hovers still focus their parent block.
@@ -20,7 +20,7 @@ function GraphV2({ selected, hover, playing, onSelect, onHover, onExpandedCountC
   const selectedIdx = selected ? selected.idx : null;
   const playingIdx = playing ? playing.idx : null;
   const playingFx = (playing && playing.pathKey != null) ? (playing.fxKey || null) : null;
-  const V = window.YVV2;
+  const V = window.YV;
   const arch = useMemo(() => V.buildArch(), []);
   const rawEdges = useMemo(() => V.buildEdges(), []);
 
@@ -127,10 +127,10 @@ function GraphV2({ selected, hover, playing, onSelect, onHover, onExpandedCountC
     if (onVisibleOrderChange) onVisibleOrderChange(visibleOrder);
   }, [visibleOrder, onVisibleOrderChange]);
 
-  // TYPE_COLORS / ROLE_COLORS are Proxy-backed live getters (see arch-v2.jsx)
+  // TYPE_COLORS / ROLE_COLORS are Proxy-backed live getters (see arch.jsx)
   // so palette / theme changes pick up automatically when settingsRev bumps.
   const { TYPE_COLORS, ROLE_COLORS } = V;
-  const LS = window.YVV2.LAYOUT_SETTINGS;
+  const LS = window.YV.LAYOUT_SETTINGS;
   const ACCENT = LS.ACCENT_COLOR;
   // referenced so the linter and useMemo dep tracker see palette identity changes
   void settingsRev;
@@ -320,7 +320,7 @@ function GraphV2({ selected, hover, playing, onSelect, onHover, onExpandedCountC
 
           {/* Nodes */}
           {arch.map(b => (
-            <NodeV2
+            <Node
               key={b.idx}
               block={b}
               node={nodes[b.idx]}
@@ -383,7 +383,7 @@ function GraphV2({ selected, hover, playing, onSelect, onHover, onExpandedCountC
   );
 }
 
-function NodeV2({ block, node, hovered, selected, playing, playingFx, dimmed, isSkipSource, colorScheme, theme, onHover, onSelect, onToggleExpand, onToggleSubExpand, accent }) {
+function Node({ block, node, hovered, selected, playing, playingFx, dimmed, isSkipSource, colorScheme, theme, onHover, onSelect, onToggleExpand, onToggleSubExpand, accent }) {
   // Only "playing" lifts; hover stays at scale 1 (heavier type-colored border
   // is the hover cue instead). This separates the three interaction states
   // into distinct visual registers.
@@ -410,7 +410,7 @@ function NodeV2({ block, node, hovered, selected, playing, playingFx, dimmed, is
       }}
     >
       {expanded ? (
-        <ExpandedNodeV2
+        <ExpandedNode
           block={block}
           node={node}
           colorScheme={colorScheme}
@@ -434,7 +434,7 @@ function NodeV2({ block, node, hovered, selected, playing, playingFx, dimmed, is
           }}
         >
           {isDetect ? (
-            <DetectNodeV2 node={node} colorScheme={colorScheme} highlight={selected || hovered} accent={accent} />
+            <DetectNode node={node} colorScheme={colorScheme} highlight={selected || hovered} accent={accent} />
           ) : (
             <>
               <rect
@@ -513,11 +513,11 @@ const IC_STYLES = {
   ],
 };
 
-function ExpandedNodeV2({ block, node, colorScheme, accent, playingFx, theme, onHover, onSelect, onToggleSubExpand }) {
+function ExpandedNode({ block, node, colorScheme, accent, playingFx, theme, onHover, onSelect, onToggleSubExpand }) {
   const SKC = theme === 'dark'
-    ? window.YVV2.SUB_KIND_COLORS_DARK
-    : window.YVV2.SUB_KIND_COLORS_LIGHT;
-  const { subFormatShape } = window.YVV2;
+    ? window.YV.SUB_KIND_COLORS_DARK
+    : window.YV.SUB_KIND_COLORS_LIGHT;
+  const { subFormatShape } = window.YV;
   const icSet = IC_STYLES[theme] || IC_STYLES.light;
   const region = node.region;
   return (
@@ -609,7 +609,7 @@ function ExpandedNodeV2({ block, node, colorScheme, accent, playingFx, theme, on
           members.includes(playingFx)
         );
         return (
-          <SubNodeV2
+          <SubNode
             key={sn.id}
             sn={sn}
             blockIdx={block.idx}
@@ -627,7 +627,7 @@ function ExpandedNodeV2({ block, node, colorScheme, accent, playingFx, theme, on
   );
 }
 
-function SubNodeV2({ sn, blockIdx, playing, accent, onHover, onSelect, onToggleSubExpand, SUB_KIND_COLORS, subFormatShape }) {
+function SubNode({ sn, blockIdx, playing, accent, onHover, onSelect, onToggleSubExpand, SUB_KIND_COLORS, subFormatShape }) {
   const sk = sn.subkind;
   const expandable = sn.expandable;
   // Lookup key for activations: the last fx-graph member of this group. For a
@@ -707,9 +707,9 @@ function SubNodeV2({ sn, blockIdx, playing, accent, onHover, onSelect, onToggleS
 }
 
 // Detect head — three separate, normal-sized boxes (P3 / P4 / P5), not one
-// stretched node. Positions come from node.detect[i].relY (set in layout-v2).
-function DetectNodeV2({ node, colorScheme, highlight, accent }) {
-  const NH = window.YVV2.NODE_H;
+// stretched node. Positions come from node.detect[i].relY (set in layout).
+function DetectNode({ node, colorScheme, highlight, accent }) {
+  const NH = window.YV.NODE_H;
   return (
     <g>
       <text x="0" y="-12" fontSize="11" fontWeight="500" fill={colorScheme.text}
@@ -737,5 +737,5 @@ function DetectNodeV2({ node, colorScheme, highlight, accent }) {
   );
 }
 
-window.YVV2 = window.YVV2 || {};
-window.YVV2.GraphV2 = GraphV2;
+window.YV = window.YV || {};
+window.YV.Graph = Graph;

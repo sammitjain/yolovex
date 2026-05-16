@@ -1,4 +1,4 @@
-// yolovex v2 — app shell.
+// yolovex — app shell.
 //
 // Interaction model:
 //   - bare left-click on a block / sub-node / inner container → open panel
@@ -122,7 +122,7 @@ function l1UpstreamSources(idx) {
 // visual graph rather than the raw 3-element list.
 function subUpstreamSources(idx, members) {
   if (!members || !members.length) return [];
-  const arch = window.YVV2.buildArch();
+  const arch = window.YV.buildArch();
   const block = arch.find(a => a.idx === idx);
   const specId = block?.specId;
   const spec = specId && window.YV_SPEC?.specs?.[specId];
@@ -139,7 +139,7 @@ function subUpstreamSources(idx, members) {
   }
 
   // Walk back through nodes the visual graph hides — getitem unconditionally
-  // (preprocessGraph in expand-v2.jsx line 42) plus anything we didn't capture
+  // (preprocessGraph in expand.jsx line 42) plus anything we didn't capture
   // a 4-D activation for (tuple-returning chunk/split, etc.). getitem nodes
   // ARE captured (they're 4-D views), so the captured check alone would let
   // them slip through; the explicit name check matches the visual rule.
@@ -222,7 +222,7 @@ function fmtShape(s) {
 // Floating overlay — persists last seen activation
 // =============================================================================
 
-function FlowOverlayV2({ active, lastActive }) {
+function FlowOverlay({ active, lastActive }) {
   const meta = window.YV_ACT?.meta;
   const inputImageUrl = meta ? '../' + meta.image : '../assets/sammit_lighthouse.jpg';
 
@@ -323,7 +323,7 @@ function FlowOverlayV2({ active, lastActive }) {
 // IO strip — shows N inputs → output mean
 // =============================================================================
 
-function IOStripV2({ active, output }) {
+function IOStrip({ active, output }) {
   const meta = window.YV_ACT?.meta;
   const inputImageUrl = meta ? '../' + meta.image : '../assets/sammit_lighthouse.jpg';
 
@@ -448,7 +448,7 @@ function BoxOverlayImage({ imageUrl, survivors, losers, maxWidth = 300, fillCont
 
 // Per-class score grid (ported from L1 panel.jsx:419).
 // classCount caps how many of the available classes are rendered.
-function ScaleGridV2({ scales, classCount, imageUrl }) {
+function ScaleGrid({ scales, classCount, imageUrl }) {
   const scaleNames = ['P3', 'P4', 'P5'];
   const sizeMap = { P3: 'small', P4: 'medium', P5: 'large' };
   const baseClasses = scales[scaleNames[0]]?.classes || [];
@@ -499,7 +499,7 @@ function ScaleGridV2({ scales, classCount, imageUrl }) {
   );
 }
 
-function DetectPanelV2({ selected, block, archBlock, roleColor, role, onClose }) {
+function DetectPanel({ selected, block, archBlock, roleColor, role, onClose }) {
   const detect = block?.detect;
   const meta = window.YV_ACT?.meta;
   const inputImageUrl = meta ? '../' + meta.image : '../assets/sammit_lighthouse.jpg';
@@ -542,7 +542,7 @@ function DetectPanelV2({ selected, block, archBlock, roleColor, role, onClose })
       {!detect && (
         <section className="panel-section">
           <div className="panel-empty">
-            No detect payload captured. Re-run <code>yolovex build-assets-v2</code> to populate detections.
+            No detect payload captured. Re-run <code>yolovex build-assets</code> to populate detections.
           </div>
         </section>
       )}
@@ -634,7 +634,7 @@ function DetectPanelV2({ selected, block, archBlock, roleColor, role, onClose })
                 />
                 <span style={{ color: 'var(--ink-4)' }}>of {availableClasses} available</span>
               </div>
-              <ScaleGridV2 scales={scales} classCount={classCount} imageUrl={inputImageUrl} />
+              <ScaleGrid scales={scales} classCount={classCount} imageUrl={inputImageUrl} />
             </section>
           )}
 
@@ -657,7 +657,7 @@ function DetectPanelV2({ selected, block, archBlock, roleColor, role, onClose })
 // Detail panel
 // =============================================================================
 
-function DetailPanelV2({ selected, onClose, panelRef }) {
+function DetailPanel({ selected, onClose, panelRef }) {
   const [pinnedCh, setPinnedCh] = useState(0);
   const [hoveredCh, setHoveredCh] = useState(null);
   // How many of the available top-K thumbs to render. The backend emits up to
@@ -672,9 +672,9 @@ function DetailPanelV2({ selected, onClose, panelRef }) {
   if (!selected) return <aside className="detail-panel" ref={panelRef} aria-hidden />;
 
   const block = window.YV_ACT?.nodes?.[String(selected.idx)];
-  const arch = window.YVV2.buildArch();
+  const arch = window.YV.buildArch();
   const archBlock = arch.find(a => a.idx === selected.idx);
-  const ROLE_COLORS = window.YVV2.ROLE_COLORS;
+  const ROLE_COLORS = window.YV.ROLE_COLORS;
   const role = archBlock?.role || 'Backbone';
   const roleColor = ROLE_COLORS[role] || '#64748b';
 
@@ -683,7 +683,7 @@ function DetailPanelV2({ selected, onClose, panelRef }) {
   if (block?.type === 'Detect') {
     return (
       <aside className="detail-panel open" ref={panelRef}>
-        <DetectPanelV2
+        <DetectPanel
           selected={selected}
           block={block}
           archBlock={archBlock}
@@ -769,7 +769,7 @@ function DetailPanelV2({ selected, onClose, panelRef }) {
 
         {act && (
           <>
-            <IOStripV2 active={selected} output={act} />
+            <IOStrip active={selected} output={act} />
 
             {visibleCh > 0 && (
               <section className="panel-section">
@@ -906,8 +906,8 @@ function readCssVar(name) {
 }
 
 function SettingsPanel({ rev, bump, onClose }) {
-  const LS = window.YVV2.LAYOUT_SETTINGS;
-  const DEF = window.YVV2.LAYOUT_SETTINGS_DEFAULTS;
+  const LS = window.YV.LAYOUT_SETTINGS;
+  const DEF = window.YV.LAYOUT_SETTINGS_DEFAULTS;
 
   const setNum = (key, raw) => {
     const v = parseFloat(raw);
@@ -929,11 +929,11 @@ function SettingsPanel({ rev, bump, onClose }) {
     Object.keys(DEF).forEach(k => { LS[k] = DEF[k]; });
     // Restore the active theme's block + role palette (drops user color edits).
     const theme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
-    const TP = window.YVV2.TYPE_PALETTES[theme];
-    const RP = window.YVV2.ROLE_PALETTES[theme];
+    const TP = window.YV.TYPE_PALETTES[theme];
+    const RP = window.YV.ROLE_PALETTES[theme];
     LS.TYPE_PALETTE = Object.fromEntries(Object.entries(TP).map(([k, v]) => [k, { ...v }]));
     LS.ROLE_PALETTE = { ...RP };
-    LS.ACCENT_COLOR = window.YVV2.ACCENTS[theme];
+    LS.ACCENT_COLOR = window.YV.ACCENTS[theme];
     // Reset CSS variables (just remove inline overrides so :root takes over).
     CSS_TOKENS.forEach(t => document.documentElement.style.removeProperty(t.name));
     document.documentElement.style.removeProperty('--brochure-thumb-scale');
@@ -1133,9 +1133,9 @@ function useServerMode() {
   return serverMode;
 }
 
-// Reload activations-v2.js into window.YV_ACT without a page reload.
+// Reload activations.js into window.YV_ACT without a page reload.
 async function reloadActivations() {
-  const res = await fetch('/activations-v2.js?t=' + Date.now(), { cache: 'no-store' });
+  const res = await fetch('/activations.js?t=' + Date.now(), { cache: 'no-store' });
   if (!res.ok) throw new Error('failed to fetch updated activations');
   const text = await res.text();
   // The file is shaped `window.YV_ACT = {...};` — eval in global scope.
@@ -1242,7 +1242,7 @@ function BuildProgressOverlay({ job, onClose, onRetry }) {
   );
 }
 
-function AppV2() {
+function App() {
   const [hover, setHover] = useState(null);
   const [lastActive, setLastActive] = useState(null);  // sticky for the overlay
   const [selected, setSelected] = useState(null);
@@ -1257,30 +1257,30 @@ function AppV2() {
   const playTimerRef = useRef(null);
   const playStopRef = useRef(false);
 
-  // Settings panel — rev counter forces GraphV2 useMemo to recompute when
-  // any setting changes (the layout/graph code reads from window.YVV2.LAYOUT_SETTINGS
+  // Settings panel — rev counter forces Graph useMemo to recompute when
+  // any setting changes (the layout/graph code reads from window.YV.LAYOUT_SETTINGS
   // at call time, so we just need to invalidate the memo).
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsRev, setSettingsRev] = useState(0);
   const bumpSettings = useCallback(() => setSettingsRev(r => r + 1), []);
 
   // Theme (light / dark) — applied as data-theme on <html> so the CSS overrides
-  // in yolovexv2.html flip every surface var. Also nudges a few SVG colors
+  // in index.html flip every surface var. Also nudges a few SVG colors
   // (edge defaults) to a darker shade so they stay legible on the dark canvas.
   const [theme, setTheme] = useState(() => document.documentElement.getAttribute('data-theme') || 'light');
   const toggleTheme = useCallback(() => {
     setTheme(prev => {
       const next = prev === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', next);
-      const LS = window.YVV2.LAYOUT_SETTINGS;
+      const LS = window.YV.LAYOUT_SETTINGS;
       // Block palette + role colors swap to the active theme's preset. User
       // edits in the Settings drawer overwrite individual entries afterwards;
       // toggling the theme again rebases on the new preset, dropping prior edits.
-      const TP = window.YVV2.TYPE_PALETTES[next];
-      const RP = window.YVV2.ROLE_PALETTES[next];
+      const TP = window.YV.TYPE_PALETTES[next];
+      const RP = window.YV.ROLE_PALETTES[next];
       LS.TYPE_PALETTE = Object.fromEntries(Object.entries(TP).map(([k, v]) => [k, { ...v }]));
       LS.ROLE_PALETTE = { ...RP };
-      LS.ACCENT_COLOR = window.YVV2.ACCENTS[next];
+      LS.ACCENT_COLOR = window.YV.ACCENTS[next];
       if (next === 'dark') {
         // Calibrated to sit clearly above the dark #0c1118 graph canvas
         // without competing with the focused accent.
@@ -1288,7 +1288,7 @@ function AppV2() {
         LS.EDGE_COLOR_DIMMED  = '#1a2c40';
         LS.EDGE_COLOR_FOCUSED = LS.ACCENT_COLOR;
       } else {
-        const DEF = window.YVV2.LAYOUT_SETTINGS_DEFAULTS;
+        const DEF = window.YV.LAYOUT_SETTINGS_DEFAULTS;
         LS.EDGE_COLOR_DEFAULT = DEF.EDGE_COLOR_DEFAULT;
         LS.EDGE_COLOR_DIMMED  = DEF.EDGE_COLOR_DIMMED;
         LS.EDGE_COLOR_FOCUSED = LS.ACCENT_COLOR;
@@ -1537,7 +1537,7 @@ function AppV2() {
         </span>
       </header>
       <main className="app-main">
-        <window.YVV2.GraphV2
+        <window.YV.Graph
           key={`graph-${dataRev}`}
           hover={hover}
           selected={selected}
@@ -1550,8 +1550,8 @@ function AppV2() {
           theme={theme}
           onToggleTheme={toggleTheme}
         />
-        <FlowOverlayV2 active={playing || hover || selected} lastActive={lastActive} />
-        <DetailPanelV2 selected={selected} onClose={() => setSelected(null)} panelRef={panelRef} />
+        <FlowOverlay active={playing || hover || selected} lastActive={lastActive} />
+        <DetailPanel selected={selected} onClose={() => setSelected(null)} panelRef={panelRef} />
         {settingsOpen && (
           <SettingsPanel rev={settingsRev} bump={bumpSettings} onClose={() => setSettingsOpen(false)} />
         )}
@@ -1561,4 +1561,4 @@ function AppV2() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<AppV2 />);
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);

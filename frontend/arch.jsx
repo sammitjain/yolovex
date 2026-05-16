@@ -1,4 +1,4 @@
-// yolovex v2 — data model.
+// yolovex — data model.
 //
 // The architecture (block list, dimensions, internal hierarchy) and the
 // block-to-block wiring are read from window.YV_SPEC — the generated
@@ -8,7 +8,7 @@
 // The ONLY hand-authored thing below is PRESENTATION layout: which column /
 // vertical slot / role bucket each block is drawn in. That's a canvas
 // decision, not architecture — ported from the original frontend/arch.jsx so
-// v2 reproduces the exact yolovex.html positions. The one deliberate change:
+// this code reproduces the exact yolovex.html positions. The one deliberate change:
 // blocks 9 (SPPF) and 10 (C2PSA) move into the "Neck" role bucket.
 
 // idx -> { col, vpos?, role }. vpos is only used for column 1 (FPN-up),
@@ -70,7 +70,7 @@ const BLOCK_DESC = {
 
 // Palettes. Light keeps the calm-pastel feel but punchier; dark is neon-on-deep
 // so the blocks pop against the dark canvas. Both palettes ship; the active
-// one is mirrored into window.YVV2.LAYOUT_SETTINGS.{TYPE_PALETTE,ROLE_PALETTE}
+// one is mirrored into window.YV.LAYOUT_SETTINGS.{TYPE_PALETTE,ROLE_PALETTE}
 // where the Settings drawer can override individual colors at runtime.
 // Light: ~88% lightness pastels with stronger chroma — calm but with presence,
 // not washed out. Borders go deeper (saturation up) and text reads at ~25%
@@ -106,29 +106,29 @@ const ROLE_PALETTES = {
 
 const ACCENTS = { light: '#c8682e', dark: '#e07840' };
 
-// Seed LAYOUT_SETTINGS with the light palette + getters so consumers (graph-v2)
+// Seed LAYOUT_SETTINGS with the light palette + getters so consumers (graph)
 // can read TYPE_COLORS / ROLE_COLORS / ACCENT and pick up Settings overrides
 // without any extra plumbing.
-window.YVV2 = window.YVV2 || {};
-window.YVV2.TYPE_PALETTES = TYPE_PALETTES;
-window.YVV2.ROLE_PALETTES = ROLE_PALETTES;
-window.YVV2.ACCENTS = ACCENTS;
-// IMPORTANT: don't capture a const reference to window.YVV2.LAYOUT_SETTINGS
-// here — layout-v2.jsx loads AFTER us and reassigns LAYOUT_SETTINGS to a fresh
+window.YV = window.YV || {};
+window.YV.TYPE_PALETTES = TYPE_PALETTES;
+window.YV.ROLE_PALETTES = ROLE_PALETTES;
+window.YV.ACCENTS = ACCENTS;
+// IMPORTANT: don't capture a const reference to window.YV.LAYOUT_SETTINGS
+// here — layout.jsx loads AFTER us and reassigns LAYOUT_SETTINGS to a fresh
 // object (so it can merge in its defaults). If we held a stale reference, the
 // proxy below would read from the orphaned object and the Settings drawer's
 // edits (which target the live LAYOUT_SETTINGS) would never be visible.
-window.YVV2.LAYOUT_SETTINGS = window.YVV2.LAYOUT_SETTINGS || {};
+window.YV.LAYOUT_SETTINGS = window.YV.LAYOUT_SETTINGS || {};
 const clonePalette = (p) => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, { ...v }]));
-window.YVV2.LAYOUT_SETTINGS.TYPE_PALETTE = clonePalette(TYPE_PALETTES.light);
-window.YVV2.LAYOUT_SETTINGS.ROLE_PALETTE = { ...ROLE_PALETTES.light };
-window.YVV2.LAYOUT_SETTINGS.ACCENT_COLOR = ACCENTS.light;
+window.YV.LAYOUT_SETTINGS.TYPE_PALETTE = clonePalette(TYPE_PALETTES.light);
+window.YV.LAYOUT_SETTINGS.ROLE_PALETTE = { ...ROLE_PALETTES.light };
+window.YV.LAYOUT_SETTINGS.ACCENT_COLOR = ACCENTS.light;
 
 // Live getters that re-resolve LAYOUT_SETTINGS on every access, so:
-//   1. arch-v2's load-order ordering with layout-v2.jsx doesn't matter
+//   1. arch's load-order ordering with layout.jsx doesn't matter
 //   2. The Settings drawer's mutations of LAYOUT_SETTINGS.TYPE_PALETTE are
-//      visible to graph-v2 on the very next render.
-const liveLS = () => window.YVV2.LAYOUT_SETTINGS;
+//      visible to graph on the very next render.
+const liveLS = () => window.YV.LAYOUT_SETTINGS;
 const TYPE_COLORS = new Proxy({}, {
   get: (_t, k) => liveLS().TYPE_PALETTE[k] || liveLS().TYPE_PALETTE.Conv,
   ownKeys: () => Object.keys(liveLS().TYPE_PALETTE),
@@ -140,7 +140,7 @@ const ROLE_COLORS = new Proxy({}, {
   getOwnPropertyDescriptor: (_t, k) => ({ enumerable: true, configurable: true, value: liveLS().ROLE_PALETTE[k] }),
 });
 // Same pattern for ACCENT — exported via a getter so consumers always see fresh.
-Object.defineProperty(window.YVV2, 'ACCENT', { get: () => liveLS().ACCENT_COLOR, configurable: true });
+Object.defineProperty(window.YV, 'ACCENT', { get: () => liveLS().ACCENT_COLOR, configurable: true });
 const ACCENT = liveLS().ACCENT_COLOR;  // kept for the module-bottom export
 
 // Build the L1 block list by joining spec-data instances with presentation.
@@ -172,9 +172,9 @@ function buildEdges() {
   return (window.YV_SPEC && window.YV_SPEC.edges) || [];
 }
 
-window.YVV2 = window.YVV2 || {};
-window.YVV2.buildArch = buildArch;
-window.YVV2.buildEdges = buildEdges;
-window.YVV2.TYPE_COLORS = TYPE_COLORS;
-window.YVV2.ROLE_COLORS = ROLE_COLORS;
-window.YVV2.ACCENT = ACCENT;
+window.YV = window.YV || {};
+window.YV.buildArch = buildArch;
+window.YV.buildEdges = buildEdges;
+window.YV.TYPE_COLORS = TYPE_COLORS;
+window.YV.ROLE_COLORS = ROLE_COLORS;
+window.YV.ACCENT = ACCENT;

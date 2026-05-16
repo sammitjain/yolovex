@@ -4,9 +4,9 @@
 
 You can drill into every block, peel it open down to the leaf modules (Conv2d, BN, SiLU, MaxPool, attention internals, …), and see the actual activations the network produces on a real image.
 
-![yolovex v2 in dark mode — full YOLO26n graph with the floating activation tile in the corner](results/yolovex_v2_full_dark_2.jpg)
+![yolovex in dark mode — full YOLO26n graph with the floating activation tile in the corner](results/yolovex_v2_full_dark_2.jpg)
 
-![yolovex v2 in light mode — same graph, calm warm-paper palette](results/yolovex_v2_full_2.jpg)
+![yolovex in light mode — same graph, calm warm-paper palette](results/yolovex_v2_full_2.jpg)
 
 ![Hovering a Conv block — the floating tile shows that block's mean activation](results/screenshot_arch_conv_hover.jpg)
 
@@ -28,14 +28,14 @@ You can drill into every block, peel it open down to the leaf modules (Conv2d, B
 
 ```bash
 uv sync
-uv run yolovex build-assets-v2           # captures activations on the default image
+uv run yolovex build-assets              # captures activations on the default image
 uv run yolovex serve                     # http://127.0.0.1:8765/ — with 📷 upload
 ```
 
 Or, if you don't want to run a server, the explorer also works as plain static HTML:
 
 ```bash
-open frontend/v2/yolovexv2.html
+open frontend/index.html
 ```
 
 The first run auto-downloads `yolo26n.pt` via Ultralytics. The default image (`assets/sammit_lighthouse.jpg`) is bundled.
@@ -74,8 +74,7 @@ uv run yolovex report          # one-page HTML report you can share
 
 ```
 src/yolovex/      # all the Python — model loading, fx tracing, activation capture, CLI, local server
-frontend/v2/      # the interactive explorer (HTML + jsx)
-frontend/         # generated payloads: spec-data.js (architecture) + activations-v2.js (per-image)
+frontend/        # the interactive explorer (HTML + jsx) + generated payloads (spec-data.js, activations.js)
 assets/           # default sample image + uploaded images (uploads/)
 results/          # screenshots used in this README
 ```

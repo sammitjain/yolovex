@@ -1,9 +1,9 @@
-"""Generate frontend/activations-v2.js — spec-driven, fully recursive activations.
+"""Generate frontend/activations.js — spec-driven, fully recursive activations.
 
 Captures the output tensor of every fx node inside every L1 block by running a
-torch.fx Interpreter on each block. The frontend (`frontend/v2/`) looks up
+torch.fx Interpreter on each block. The frontend (`frontend/`) looks up
 activations by L1 index + fx node name (which it already carries on every
-subNode via `members[-1]`), so this matches the v2 spec exactly with no
+subNode via `members[-1]`), so this matches the spec exactly with no
 per-type hardcoding.
 
 Asset schema (window.YV_ACT):
@@ -55,7 +55,7 @@ def _emit(progress, kind: str, **fields) -> None:
             pass
     # human-readable mirror for the CLI
     if kind == "stage":
-        print(f"  [v2] stage: {fields.get('stage')}")
+        print(f"  stage: {fields.get('stage')}")
     elif kind == "block":
         idx = fields.get("idx")
         total = fields.get("total")
@@ -65,19 +65,19 @@ def _emit(progress, kind: str, **fields) -> None:
         print(f"    [{idx:>2}/{total}] {cls:<10} L1{l1} sub={sub}")
     elif kind == "detect_pass":
         ok = "ok" if fields.get("ok") else "fail"
-        print(f"    [v2] detect pass {fields.get('pass')}: {ok}")
+        print(f"    detect pass {fields.get('pass')}: {ok}")
     elif kind == "done":
         print(
-            f"  [v2] done: {fields.get('n_blocks')} blocks, "
+            f"  done: {fields.get('n_blocks')} blocks, "
             f"{fields.get('n_subs')} sub-nodes, skipped={fields.get('skipped')}"
         )
     elif kind == "error":
-        print(f"  [v2] error: {fields.get('message')}")
+        print(f"  error: {fields.get('message')}")
 
 # How many top classes (by overall peak score) to emit per scale in the Detect
 # payload. Frontend lets the user choose how many of these to actually render
 # (default 6, capped at this build-time value).
-TOP_K_CLASSES_V2 = 12
+TOP_K_CLASSES_DETECT = 12
 
 
 def _render_tensor(tensor: torch.Tensor) -> dict | None:
@@ -152,7 +152,7 @@ def _build_detect_payload(
     image_path: Path,
     weights: str,
     imgsz: int,
-    top_k_classes: int = TOP_K_CLASSES_V2,
+    top_k_classes: int = TOP_K_CLASSES_DETECT,
     progress=None,
 ) -> dict | None:
     """Run an Ultralytics predict pass to harvest the Detect head's per-scale
