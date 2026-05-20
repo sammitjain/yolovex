@@ -7,7 +7,7 @@ const { useState, useRef, useEffect, useMemo, useCallback } = React;
 
 function formatShape(sh) {
   if (Array.isArray(sh) && sh.length && typeof sh[0] === 'number') {
-    return `(${sh.join(', ')})`;
+    return sh.join('×');
   }
   return null;
 }
@@ -237,7 +237,12 @@ function Graph({ selected, hover, playing, onSelect, onHover, onExpandedCountCha
       ref={containerRef}
       className="graph-container"
       onMouseDown={onMouseDown}
-      style={{ cursor: draggingRef.current ? 'grabbing' : 'grab' }}
+      style={{
+        cursor: draggingRef.current ? 'grabbing' : 'grab',
+        // Canvas background is theme-aware via LS.GRAPH_BG (rebased per theme in
+        // app.jsx toggleTheme). Inline override beats the CSS --graph-bg var.
+        background: LS.GRAPH_BG || undefined,
+      }}
     >
       <svg width={containerSize.w} height={containerSize.h} style={{ display: 'block' }}>
         <defs>
@@ -351,7 +356,7 @@ function Graph({ selected, hover, playing, onSelect, onHover, onExpandedCountCha
                 <g transform={`translate(${nodes[0].x - 110}, ${nodes[0].y - 4})`}>
                   <rect width="80" height="60" rx="6" fill={inputFill} stroke={inputStroke} strokeWidth="1" />
                   <text x="40" y="34" fontSize="9" fill={inputText} textAnchor="middle" fontFamily="ui-monospace, monospace">input</text>
-                  <text x="40" y="46" fontSize="9" fill={inputText} textAnchor="middle" fontFamily="ui-monospace, monospace">(1,3,640,480)</text>
+                  <text x="40" y="46" fontSize="9" fill={inputText} textAnchor="middle" fontFamily="ui-monospace, monospace">1×3×640×480</text>
                 </g>
                 <path
                   d={`M ${nodes[0].x - 30} ${nodes[0].y + 26} L ${nodes[0].x} ${nodes[0].y + 26}`}
@@ -447,7 +452,7 @@ function Node({ block, node, hovered, selected, playing, playingFx, dimmed, isSk
                 fontFamily="ui-monospace, SFMono-Regular, monospace" opacity="0.7">
                 [{block.idx}]
               </text>
-              <text x="38" y="22" fontSize="13" fontWeight="600" fill={colorScheme.text}>
+              <text x="38" y="22" fontSize={colorScheme.textSize || 13} fontWeight="600" fill={colorScheme.text}>
                 {block.type}
               </text>
               {shape && (
@@ -500,33 +505,52 @@ function fxMembersInContainer(specId, containerPath) {
 // slightly denser and dashes get tighter as you descend, signaling "you are
 // deeper" without competing with the block's type color (which dresses the
 // outermost expanded region itself).
+// Nesting-container depth bands. Fill/stroke COLOURS are no longer used at
+// render time — the container inherits its block's family colour (see
+// ExpandedNode). Only `fOpacity` (depth shading) and `sw` (border weight) are
+// read; the colour fields are kept so the Settings drawer's existing editor
+// stays valid and `reset` round-trips. Light fills are pale, so opacity climbs
+// gently; dark fills are deep, so they need higher opacity to register.
 const IC_STYLES = {
   light: [
-    { fill: '#f0eef8', fOpacity: 0.45, stroke: '#9080c8', sw: 1.5, dash: '5 3' },
-    { fill: '#e8e4f2', fOpacity: 0.50, stroke: '#7060a8', sw: 1.2, dash: '4 2' },
-    { fill: '#e0dcea', fOpacity: 0.55, stroke: '#5040a0', sw: 1.0, dash: '3 2' },
+    { fill: '#000000', fOpacity: 0.12, stroke: '#000000', sw: 1.4, dash: '' },
+    { fill: '#000000', fOpacity: 0.20, stroke: '#000000', sw: 1.2, dash: '' },
+    { fill: '#000000', fOpacity: 0.28, stroke: '#000000', sw: 1.0, dash: '' },
   ],
   dark: [
-    { fill: '#28244a', fOpacity: 0.45, stroke: '#7068c0', sw: 1.5, dash: '5 3' },
-    { fill: '#201e3c', fOpacity: 0.55, stroke: '#5850a8', sw: 1.2, dash: '4 2' },
-    { fill: '#181830', fOpacity: 0.65, stroke: '#403880', sw: 1.0, dash: '3 2' },
+    { fill: '#000000', fOpacity: 0.45, stroke: '#000000', sw: 1.4, dash: '' },
+    { fill: '#000000', fOpacity: 0.60, stroke: '#000000', sw: 1.2, dash: '' },
+    { fill: '#000000', fOpacity: 0.75, stroke: '#000000', sw: 1.0, dash: '' },
   ],
 };
+// Expose for Settings drawer + theme swap to mirror into LS.NESTING_TINTS.
+window.YV.NESTING_TINT_SETS = IC_STYLES;
+const _cloneTints = (arr) => arr.map(o => ({ ...o }));
+if (!('NESTING_TINTS' in window.YV.LAYOUT_SETTINGS)) {
+  window.YV.LAYOUT_SETTINGS.NESTING_TINTS = _cloneTints(IC_STYLES.light);
+}
+if (!('EXPANDABLE_DASH' in window.YV.LAYOUT_SETTINGS)) {
+  window.YV.LAYOUT_SETTINGS.EXPANDABLE_DASH = '6 3';
+}
 
 function ExpandedNode({ block, node, colorScheme, accent, playingFx, theme, onHover, onSelect, onToggleSubExpand }) {
-  const SKC = theme === 'dark'
-    ? window.YV.SUB_KIND_COLORS_DARK
-    : window.YV.SUB_KIND_COLORS_LIGHT;
+  // Inner sub-node palette + nesting-band styles flow through LAYOUT_SETTINGS
+  // so the Settings drawer can recolor them live. Theme swap (app.jsx) rebases
+  // both from the matching IC_STYLES / INNER_PALETTES preset.
+  const LS = window.YV.LAYOUT_SETTINGS;
+  const SKC = LS.INNER_PALETTE || (theme === 'dark' ? window.YV.SUB_KIND_COLORS_DARK : window.YV.SUB_KIND_COLORS_LIGHT);
   const { subFormatShape } = window.YV;
-  const icSet = IC_STYLES[theme] || IC_STYLES.light;
+  const icSet = LS.NESTING_TINTS || IC_STYLES[theme] || IC_STYLES.light;
   const region = node.region;
   return (
     <g>
-      {/* Region container */}
+      {/* Region container — reuses the block's family colour (fill + border)
+          so an expanded block still reads as "the same block, opened". Solid
+          border (no dash); depth is conveyed by the nesting containers within. */}
       <rect
         width={node.w} height={node.h} rx="10"
         fill={colorScheme.fill} fillOpacity="0.35"
-        stroke={accent} strokeWidth="1.5" strokeDasharray="5 3"
+        stroke={colorScheme.border} strokeWidth="1.5"
       />
       <text x="12" y="19" fontSize="11" fontWeight="500" fill={colorScheme.text}
         fontFamily="ui-monospace, SFMono-Regular, monospace" opacity="0.7">
@@ -553,14 +577,19 @@ function ExpandedNode({ block, node, colorScheme, accent, playingFx, theme, onHo
           else onSelect && onSelect(payload);
         };
         // ic.depth = path length (1 = outermost peel inside the block, 2 = one
-        // level deeper, 3+ = clamped). Pick the matching IC style row.
+        // level deeper, 3+ = clamped). Nesting containers reuse the block's
+        // FAMILY colour (so the expansion still reads as one block); depth is
+        // conveyed purely by fill opacity (denser = deeper). Solid border, no
+        // dash. The per-depth opacity + stroke-width come from
+        // LAYOUT_SETTINGS.NESTING_TINTS[depth] — that's the knob to tune depth
+        // shading in the Settings drawer.
         const s = icSet[Math.min((ic.depth || 1) - 1, icSet.length - 1)];
         return (
           <g key={`ic-${ic.pathKey}`}>
             <rect
               x={ic.x} y={ic.y} width={ic.w} height={ic.h} rx="8"
-              fill={s.fill} fillOpacity={s.fOpacity}
-              stroke={s.stroke} strokeWidth={s.sw} strokeDasharray={s.dash}
+              fill={colorScheme.fill} fillOpacity={s.fOpacity}
+              stroke={colorScheme.border} strokeWidth={s.sw}
               style={{ cursor: 'pointer' }}
               onMouseEnter={onEnter}
               onMouseLeave={onLeave}
@@ -568,7 +597,7 @@ function ExpandedNode({ block, node, colorScheme, accent, playingFx, theme, onHo
             />
             <text
               x={ic.x + ic.w - 10} y={ic.y + 14}
-              fontSize="10.5" fontWeight="600" fill={s.stroke}
+              fontSize="10.5" fontWeight="600" fill={colorScheme.text}
               fontFamily="ui-monospace, monospace" textAnchor="end"
               style={{ cursor: 'pointer' }}
               onClick={(e) => { e.stopPropagation(); onToggleSubExpand(block.idx, ic.pathKey); }}
@@ -669,7 +698,7 @@ function SubNode({ sn, blockIdx, playing, accent, onHover, onSelect, onToggleSub
     return (
       <g style={{ cursor }} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={handleClick}>
         <rect x={sn.x} y={sn.y} width={sn.w} height={sn.h} rx="4"
-          fill={fill} stroke={stroke} strokeWidth="1" strokeDasharray="3 2" />
+          fill={fill} stroke={stroke} strokeWidth="1" />
         <text x={sn.x + sn.w / 2} y={sn.y + sn.h / 2 + 4} fontSize="10.5" fill={text}
           textAnchor="middle" fontFamily="ui-monospace, monospace">
           {sn.label}
@@ -678,14 +707,15 @@ function SubNode({ sn, blockIdx, playing, accent, onHover, onSelect, onToggleSub
     );
   }
 
-  const c = SUB_KIND_COLORS[sk] || SUB_KIND_COLORS.mod;
+  // Colour by module type first (Conv2d / BN / SiLU …), falling back to the
+  // op-subkind table for pure fx ops. Single source: arch.jsx getNodeStyle.
+  const c = window.YV.getNodeStyle(sn.targetClass, sk);
   const sh = subFormatShape(sn.shape);
   return (
     <g style={{ cursor, filter: playing ? 'url(#node-playing)' : undefined }} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={handleClick}>
       <rect x={sn.x} y={sn.y} width={sn.w} height={sn.h} rx="6"
-        fill={c.fill} stroke={playing ? accent : c.border} strokeWidth={playing ? 2.5 : (expandable ? 2 : 1.5)}
-        strokeDasharray={expandable ? '6 3' : undefined} />
-      <text x={sn.x + sn.w / 2} y={sn.y + sn.h / 2 + (sh ? -2 : 4)} fontSize="12" fontWeight="600"
+        fill={c.fill} stroke={playing ? accent : c.border} strokeWidth={playing ? 2.5 : (expandable ? 2 : 1.5)} />
+      <text x={sn.x + sn.w / 2} y={sn.y + sn.h / 2 + (sh ? -2 : 4)} fontSize={c.textSize || 12} fontWeight="600"
         fill={c.text} textAnchor="middle">
         {sn.label}
       </text>

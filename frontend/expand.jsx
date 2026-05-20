@@ -239,6 +239,18 @@ function aggregateWithExpansions(graph, shapes, expansions, pathClasses) {
   for (const n of aggNodes) {
     const orig = graph.nodes.find(g => g.name === n.id);
     n.subkind = classifySubkind(orig, n);
+    // Carry the nn.Module class through so the renderer can colour every module
+    // node by type (Conv2d / BatchNorm2d / SiLU / …) via getNodeStyle. Three
+    // sources, in order:
+    //   1. leaf fx node          → orig.target_class
+    //   2. aggregated mod group  → pathClasses[key]  (e.g. cv1 → 'Conv')
+    //   3. last-resort           → the group label IF it's a module group
+    //      (label is already the class name for mod groups: 'Conv',
+    //      'Bottleneck', 'C3k', …). Pure ops / io / attr stay null and fall
+    //      back to subkind colouring.
+    n.targetClass = (orig && orig.target_class)
+      || (pathClasses && pathClasses[n.id])
+      || (n.kind === 'mod' ? n.label : null);
   }
 
   return { nodes: aggNodes, edges: aggEdges };
@@ -800,7 +812,7 @@ function subFormatShape(sh) {
 // labeled rectangle so the user can see the grouping (and click the label to
 // collapse). This is spec-viewer's `computeContainers`, lightly adapted.
 const INNER_PAD_X      = 14;
-const INNER_PAD_TOP    = 22;
+const INNER_PAD_TOP    = 30;  // clearance between a nesting-container label and its first child
 const INNER_PAD_BOTTOM = 12;
 
 function _arrayEq(a, b) {
@@ -883,7 +895,9 @@ function computeInnerContainers(aggNodes, positions, pathClasses) {
 // Otherwise returns the laid-out internal sub-graph in LOCAL coords (0-origin):
 //   { subNodes, subEdges, innerContainers, entryNodes, exitNodes, regionW, regionH, flip }
 const REGION_PAD_X      = 22;
-const REGION_PAD_TOP    = 30;
+// Title (block label) sits near y≈19; give the first sub-node extra clearance
+// below it so the expansion doesn't look cramped under the title.
+const REGION_PAD_TOP    = 44;
 const REGION_PAD_BOTTOM = 22;
 
 function buildExpansion(idx, opts) {
@@ -983,6 +997,7 @@ function buildExpansion(idx, opts) {
     id: n.id,
     label: n.label,
     subkind: n.subkind || n.kind,
+    targetClass: n.targetClass || null,
     shape: n.shape,
     pathKey: n.pathKey,
     expandable: !!n.expandable,
@@ -1028,5 +1043,17 @@ window.YV.buildExpansion       = buildExpansion;
 window.YV.SUB_KIND_COLORS      = SUB_KIND_COLORS_LIGHT;  // alias for back-compat
 window.YV.SUB_KIND_COLORS_LIGHT = SUB_KIND_COLORS_LIGHT;
 window.YV.SUB_KIND_COLORS_DARK  = SUB_KIND_COLORS_DARK;
+// Bundle both theme palettes for the Settings drawer + theme switcher to
+// mirror into LAYOUT_SETTINGS.INNER_PALETTE (same pattern as TYPE_PALETTES).
+window.YV.INNER_PALETTES = { light: SUB_KIND_COLORS_LIGHT, dark: SUB_KIND_COLORS_DARK };
 window.YV.subFormatShape       = subFormatShape;
 window.YV.opShortName          = opShortName;
+
+// Seed LAYOUT_SETTINGS.INNER_PALETTE with a deep-cloned light preset so the
+// Settings drawer can edit individual sub-kind colors without mutating the
+// shared default. graph.jsx's ExpandedNode reads from LS at render time.
+const _cloneInner = (p) => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, { ...v }]));
+window.YV.LAYOUT_SETTINGS = window.YV.LAYOUT_SETTINGS || {};
+if (!('INNER_PALETTE' in window.YV.LAYOUT_SETTINGS)) {
+  window.YV.LAYOUT_SETTINGS.INNER_PALETTE = _cloneInner(SUB_KIND_COLORS_LIGHT);
+}

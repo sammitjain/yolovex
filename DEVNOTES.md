@@ -169,6 +169,7 @@ Anchors (`A=6300` at imgsz=640) decompose row-major across the per-scale feature
 
 ## Open questions / next iterations
 
+- **Deeper-expansion anchoring (v2)** — when a sub-node is peeled open (shift+click), its internal subgraph should grow strictly *down-and-right* from that sub-node's prior top-left, mirroring how an L1 block expands. Today `autoLayout` (`expand.jsx`) re-flows the whole internal graph, so a branch sub-node like C3k2's `Bottleneck` (offset right) spreads up/left of its old corner (e.g. its residual `add` fans left). Fix is in `autoLayout`'s placement of recursively-expanded groups, not `computeInnerContainers` (which derives the box from child positions). Needs runtime layout iteration. Deferred.
 - **L0 + L3** views, then a fidelity scrubber that switches between them on a single canvas (out of scope for the current iteration; L0 is trivial, L3 needs sub-sub-module hooks inside Bottleneck and PSABlock).
 - **Per-page spacing controls** — bake the vertical / horizontal layout constants behind a small settings widget so a user can dial the diagram up to their preferred density.
 - **Better arrow heads on L1** — port the L2 markers (notched-tail, `markerUnits="userSpaceOnUse"`) back to L1 so both pages match.
