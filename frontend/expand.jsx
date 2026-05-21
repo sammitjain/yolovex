@@ -1118,6 +1118,21 @@ function buildExpansion(idx, opts) {
 
 window.YV = window.YV || {};
 window.YV.buildExpansion       = buildExpansion;
+// Additive (ADR-0001): expose the pure graph-SEMANTIC transforms so the ELK
+// layout path (expand-elk.jsx) can reuse them without duplicating logic or
+// touching anything geometric here. These do not change legacy behaviour.
+window.YV._graphSem = {
+  preprocessGraph,
+  aggregateWithExpansions,
+  classifySubkind,
+  opShortName,
+  opVisibilityForLevel,
+  // sizing rules + region padding, reused so ELK node sizes / region framing
+  // match the legacy look.
+  nodeSize,
+  SUB_NODE_W, SUB_NODE_H, ARITH_R, SMALL_W, SMALL_H,
+  REGION_PAD_X, REGION_PAD_TOP, REGION_PAD_BOTTOM,
+};
 window.YV.SUB_KIND_COLORS      = SUB_KIND_COLORS_LIGHT;  // alias for back-compat
 window.YV.SUB_KIND_COLORS_LIGHT = SUB_KIND_COLORS_LIGHT;
 window.YV.SUB_KIND_COLORS_DARK  = SUB_KIND_COLORS_DARK;

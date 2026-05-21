@@ -1,3 +1,9 @@
+> **ARCHIVED — historical only.** This file describes an earlier two-page
+> L1/L2 frontend (`yolovex.html`, `yolovex-l2.html`, `data-l2.js`,
+> `arch-l2.jsx`, …) that no longer exists. The current frontend is a unified
+> single page. For the authoritative shared vocabulary see [`CONTEXT.md`](../CONTEXT.md);
+> for architectural decisions see [`docs/adr/`](./adr/). Slated for deletion.
+
 # yolovex
 
 Interactive YOLO architecture explainer, inspired by [CNN Explainer](https://poloclub.github.io/cnn-explainer/). My goal was to dive into the new YOLO26 model from Ultralytics and understand the architecture. This project will let you trace how an image flows through the architecture of YOLO (currently YOLO26n) and to develop an intuition about what each block/layer/operation contributions to the final object detection. 

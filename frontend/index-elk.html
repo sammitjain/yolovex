@@ -1,0 +1,806 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>yolovex (ELK) — YOLO26 architecture + activations</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg:                  #fafaf8;
+      --bg-tint:             #f3f2ef;
+      --panel:               #ffffff;
+      --graph-bg:            #fdfdfc;
+      --code-bg:             #eeecea;
+
+      --ink:                 #1c2028;
+      --ink-2:               #4c5668;
+      --ink-3:               #78889a;
+      --ink-4:               #a8b4c0;
+
+      --line:                #dcdad6;
+      --line-2:              #c8c4be;
+
+      --accent:              #c8682e;  /* warm amber-orange */
+
+      --shadow-sm:           0 1px 3px rgba(28,32,40,.05);
+      --shadow-md:           0 6px 22px rgba(28,32,40,.09);
+
+      /* Channel-stack brochure — auto-fill grid of thumbs (functional knobs). */
+      --brochure-thumb-min:  52px;
+      --brochure-thumb-scale:0.95;
+
+      /* Detect panel — per-class score grid cell size. */
+      --scale-grid-cell-scale: 0.7;
+    }
+
+    /* Dark theme — applied via data-theme="dark" on <html>. Deep navy-slate
+       canvas, mid-tone panels; designed so the colored-glass block fills from
+       arch's dark palette read against the canvas rather than into it. */
+    html[data-theme="dark"] {
+      --bg:                  #111822;
+      --bg-tint:             #1a2432;
+      --panel:               #172030;
+      --graph-bg:            #0c1118;
+      --code-bg:             #0c1118;
+
+      --ink:                 #e2e8f2;
+      --ink-2:               #9eafc0;
+      --ink-3:               #6a7e92;
+      --ink-4:               #3e4e60;
+
+      --line:                #28384c;
+      --line-2:              #384e64;
+
+      --accent:              #e07840;  /* brighter on dark bg */
+
+      --shadow-md:           0 8px 28px rgba(0,0,0,.55);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body, #root { height: 100%; }
+    body {
+      font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+    .mono, .mono * { font-family: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace; }
+    button { font-family: inherit; cursor: pointer; }
+    .app { height: 100%; display: flex; flex-direction: column; }
+
+    .app-header {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      padding: 10px 18px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+      color: var(--ink);
+    }
+    .app-header strong { font-size: 15px; }
+    .app-header .divider { color: var(--line-2); }
+    .app-header .subtitle { color: var(--ink-2); }
+    .app-header .hint {
+      margin-left: auto;
+      color: var(--ink-4);
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, monospace;
+    }
+    .flow-controls {
+      display: flex; align-items: center; gap: 8px;
+      margin-left: 20px;
+    }
+    .flow-btn {
+      padding: 4px 10px; font-size: 12px; font-weight: 600;
+      border: 1px solid var(--line); background: var(--panel);
+      color: var(--ink); border-radius: 6px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .flow-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .flow-speed { display: flex; gap: 2px; }
+    .flow-speed-btn {
+      padding: 3px 7px; font-size: 11px;
+      border: 1px solid var(--line); background: var(--panel);
+      color: var(--ink-3); border-radius: 4px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .flow-speed-btn.active {
+      background: var(--accent); color: white;
+      border-color: var(--accent);
+    }
+    .flow-count {
+      font-size: 11px; color: var(--ink-4);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    .app-main { flex: 1; position: relative; overflow: hidden; }
+
+    .graph-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+      user-select: none;
+      background: var(--graph-bg);
+    }
+
+    .zoom-controls {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .zoom-controls button {
+      width: 32px;
+      height: 32px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      color: var(--ink-2);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    .zoom-controls button:hover { background: var(--bg-tint); color: var(--ink); }
+    .zoom-controls .fit-btn { font-size: 14px; }
+    .zoom-controls .theme-btn { font-size: 14px; }
+
+    /* ============== FLOATING OVERLAY (hover-driven) ============== */
+    .flow-overlay {
+      position: absolute; top: 14px; right: 14px;
+      width: 256px;     /* tweak me — overlay tile size; aspect ratio is auto */
+      background: var(--panel);
+      backdrop-filter: blur(6px);
+      border: 1px solid var(--line); border-radius: 10px;
+      box-shadow: var(--shadow-md);
+      padding: 10px; pointer-events: none; z-index: 5;
+      transition: border-color 200ms;
+    }
+    .flow-overlay.using-fallback {
+      border-style: dashed; border-color: var(--ink-4);
+    }
+    .flow-overlay.using-fallback .flow-overlay__sub {
+      color: var(--ink-3); font-style: italic;
+    }
+    .flow-overlay__frame {
+      position: relative; width: 100%;
+      overflow: hidden; border-radius: 6px;
+      background: #0f172a;
+    }
+    .flow-overlay__frame img {
+      width: 100%; height: 100%; display: block;
+      /* Stretch every activation to fill the same aspect-ratio box as the
+         input image so spatial comparison is consistent across nodes with
+         different intermediate resolutions. */
+      object-fit: fill;
+    }
+    .flow-overlay__caption {
+      margin-top: 8px; font-size: 12.5px; font-weight: 600;
+      color: var(--ink); font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .flow-overlay__sub {
+      font-size: 10.5px; color: var(--ink-3);
+      font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+
+    /* ============== DETAIL PANEL (L2-style) ============== */
+    .detail-panel {
+      position: absolute; top: 0; right: 0; bottom: 0;
+      width: 640px;     /* tweak me — side panel width */
+      background: var(--panel);
+      border-left: 1px solid var(--line);
+      overflow-y: auto; z-index: 20;
+      box-shadow: -8px 0 32px rgba(15,23,42,.06);
+      display: none;
+    }
+    .detail-panel.open {
+      display: block;
+      animation: panel-slide-in 280ms cubic-bezier(.16,1,.3,1);
+    }
+    @keyframes panel-slide-in {
+      from { transform: translateX(40px); opacity: 0; }
+      to { transform: translateX(0); opacity: 1; }
+    }
+    .panel-inner { padding: 22px 24px 60px; }
+    .panel-header {
+      display: flex; justify-content: space-between; align-items: flex-start;
+      gap: 16px; padding-bottom: 18px;
+      border-bottom: 1px solid var(--line); margin-bottom: 18px;
+    }
+    .panel-title { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+    .panel-idx { font-family: 'IBM Plex Mono', monospace; color: var(--ink-3); font-weight: 500; font-size: 18px; }
+    .panel-desc { font-size: 13px; color: var(--ink-2); margin-top: 6px; margin-bottom: 10px; text-wrap: pretty; }
+    .panel-path-hint {
+      margin-top: 6px; font-size: 11.5px; color: var(--ink-3);
+    }
+    .panel-path-hint code {
+      font-family: 'IBM Plex Mono', monospace; font-size: 11.5px;
+      background: var(--bg-tint); padding: 1px 5px; border-radius: 3px; color: var(--ink);
+    }
+    .role-pill {
+      display: inline-block; padding: 2px 10px; border-radius: 999px;
+      font-size: 10.5px; font-weight: 600;
+      letter-spacing: 0.06em; text-transform: uppercase;
+    }
+    .close-btn {
+      width: 28px; height: 28px; border-radius: 6px;
+      border: 1px solid var(--line); background: var(--panel);
+      color: var(--ink-3); font-size: 18px; line-height: 1; flex-shrink: 0;
+    }
+    .close-btn:hover { border-color: var(--ink-4); color: var(--ink); }
+
+    .panel-section { margin-bottom: 28px; }
+    .section-label {
+      font-size: 11px; color: var(--ink-3); text-transform: uppercase;
+      letter-spacing: 0.08em; font-weight: 600; margin: 0 0 12px;
+    }
+    .micro-help { font-size: 12px; color: var(--ink-3); margin: 0 0 14px; text-wrap: pretty; }
+
+    /* I/O strip */
+    .io-strip {
+      display: flex; align-items: center; gap: 14px;
+      padding: 14px; background: var(--bg-tint);
+      border: 1px solid var(--line); border-radius: 8px;
+    }
+    .io-tile {
+      border-radius: 4px;
+      box-shadow: 0 1px 2px rgba(0,0,0,.06);
+      object-fit: fill;       /* stretch — consistent with the floating overlay */
+      background: #0f172a;
+    }
+    .arrow { color: var(--ink-4); font-size: 18px; }
+    .io-pair { display: flex; align-items: center; gap: 6px; }
+    .plus { color: var(--ink-4); font-weight: 600; }
+    .shape-caption {
+      font-family: 'IBM Plex Mono', monospace; font-size: 11.5px;
+      color: var(--ink-2); margin-top: 8px; padding-left: 4px;
+    }
+
+    /* Channel brochure */
+    .channel-brochure {
+      display: flex; gap: 14px; align-items: flex-start;
+      background: var(--bg-tint); border: 1px solid var(--line);
+      border-radius: 8px; padding: 14px;
+    }
+    .brochure-preview { flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; }
+    .brochure-meta {
+      font-size: 11px; color: var(--ink-3);
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .meta-row { display: flex; justify-content: space-between; gap: 8px; }
+    .meta-row .meta-k { color: var(--ink-3); }
+    .meta-row .meta-v { color: var(--ink); }
+    .meta-row .meta-v.mono { font-family: 'IBM Plex Mono', monospace; }
+
+    .brochure-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(calc(var(--brochure-thumb-min) * var(--brochure-thumb-scale)), 1fr));
+      gap: calc(5px * var(--brochure-thumb-scale));
+      flex: 1; align-content: start;
+    }
+    /* Hard cap each thumb's own width so a wide panel doesn't grow them past
+       the user-selected min. Without this, a small K stretches each tile. */
+    .brochure-thumb {
+      max-width: calc(var(--brochure-thumb-min) * var(--brochure-thumb-scale) * 1.4);
+    }
+    .brochure-thumb {
+      position: relative; padding: 0; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 4px;
+      cursor: pointer; overflow: hidden;
+      transition: transform 120ms, border-color 120ms, box-shadow 120ms;
+    }
+    .brochure-thumb img { display: block; width: 100%; height: auto; }
+    .brochure-thumb:hover, .brochure-thumb.hovered {
+      border-color: var(--ink-4);
+      transform: translateY(-1px);
+      box-shadow: 0 3px 8px rgba(15,23,42,.10);
+    }
+    .brochure-thumb.pinned {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent);
+    }
+    .thumb-idx {
+      position: absolute; bottom: 2px; right: 3px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 9px;
+      color: white; background: rgba(15,23,42,.7);
+      padding: 0 4px; border-radius: 2px; line-height: 1.4;
+    }
+    .stack-caption { font-size: 11.5px; color: var(--ink-2); margin-top: 8px; }
+
+    /* Stats grid */
+    .stats-grid { display: grid; grid-template-columns: 1fr; gap: 6px; }
+    .stats-grid > div {
+      display: flex; justify-content: space-between;
+      padding: 6px 10px; background: var(--bg-tint);
+      border-radius: 4px; font-size: 12px;
+    }
+    .stats-grid .k { color: var(--ink-3); }
+    .stats-grid .v { color: var(--ink); font-weight: 500; }
+    .stats-grid .v.mono { font-family: 'IBM Plex Mono', monospace; font-size: 11.5px; }
+
+    /* ============== BLOCK CONTENT (curated explainer + forward source) ============== */
+    .content-tagline {
+      font-size: 13px; color: var(--ink-2); font-style: italic;
+      margin: 0 0 14px; line-height: 1.5;
+    }
+    .content-block { margin-bottom: 14px; }
+    .content-sublabel {
+      font-size: 10px; color: var(--ink-3); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 5px;
+    }
+    .md-p { font-size: 13px; color: var(--ink); line-height: 1.55; margin: 0 0 8px; }
+    .md-p:last-child { margin-bottom: 0; }
+    .md-ul {
+      margin: 0 0 8px; padding-left: 18px;
+      font-size: 13px; color: var(--ink); line-height: 1.55;
+    }
+    .md-ul li { margin-bottom: 4px; }
+    .md-code {
+      font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      font-size: 12px; color: var(--ink);
+      background: var(--code-bg); padding: 1px 5px; border-radius: 3px;
+    }
+    .content-yolo26 {
+      padding: 10px 12px; border-radius: 6px;
+      background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+      border-left: 3px solid var(--accent);
+    }
+    .content-yolo26 .content-sublabel { color: var(--accent); }
+    .content-forward {
+      margin-top: 10px; font-size: 12px;
+      border: 1px solid var(--line); border-radius: 6px;
+      background: var(--bg-tint);
+    }
+    .content-forward summary {
+      cursor: pointer; padding: 8px 12px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 11.5px;
+      color: var(--ink-2); user-select: none;
+    }
+    .content-forward summary:hover { color: var(--ink); }
+    .content-forward[open] summary { border-bottom: 1px solid var(--line); }
+    .content-code {
+      margin: 0; padding: 10px 12px;
+      font-family: 'IBM Plex Mono', ui-monospace, monospace;
+      font-size: 11.5px; line-height: 1.45;
+      color: var(--ink); background: var(--code-bg);
+      overflow-x: auto; white-space: pre;
+      border-radius: 0 0 6px 6px;
+    }
+    .content-refs {
+      display: flex; flex-wrap: wrap; gap: 10px;
+      margin-top: 10px; font-size: 11.5px;
+    }
+    .content-refs a {
+      color: var(--accent); text-decoration: none;
+      border-bottom: 1px dotted color-mix(in srgb, var(--accent) 50%, transparent);
+    }
+    .content-refs a:hover { border-bottom-style: solid; }
+
+    /* Deferred placeholder card (e.g. Detect) */
+    .panel-deferred {
+      padding: 14px; background: #fef9c3;
+      border: 1px solid #fde68a; border-radius: 8px;
+      color: #713f12; font-size: 13px; line-height: 1.5;
+    }
+    .panel-empty {
+      padding: 14px; background: var(--bg-tint);
+      border: 1px dashed var(--line-2); border-radius: 8px;
+      color: var(--ink-3); font-size: 12.5px; line-height: 1.5;
+    }
+
+    /* ============== DETECT PANEL ============== */
+    .detect-conf-box {
+      margin-top: 12px; padding: 10px 12px;
+      background: var(--bg-tint); border-radius: 6px;
+      border: 1px solid var(--line);
+    }
+    .detect-conf-row {
+      display: flex; align-items: baseline; justify-content: space-between;
+      font-size: 12px; margin-bottom: 6px;
+    }
+    .detect-conf-row strong { color: var(--ink); font-weight: 600; }
+    .detect-conf-row .num {
+      font-family: 'IBM Plex Mono', monospace; color: var(--ink);
+    }
+    .detect-conf-controls {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .detect-conf-controls input[type="range"] {
+      flex: 1; cursor: pointer;
+    }
+    .detect-conf-controls input[type="number"] {
+      width: 88px; padding: 4px 6px; font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      border: 1px solid var(--line); border-radius: 4px;
+      background: var(--panel); color: var(--ink);
+    }
+    .detect-conf-stats {
+      font-size: 11px; color: var(--ink-2); margin-top: 6px;
+    }
+    .detect-conf-stats .muted { color: var(--ink-4); }
+    .detect-conf-bounds {
+      display: flex; justify-content: space-between;
+      font-size: 10px; color: var(--ink-4); margin-top: 2px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+
+    /* Horizontal bar chart of final detections */
+    .det-bars { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; }
+    .det-bar {
+      display: grid; grid-template-columns: 14px 110px 1fr 58px;
+      align-items: center; gap: 8px;
+      font-family: 'IBM Plex Mono', monospace; font-size: 12px;
+    }
+    .det-bar .dot {
+      width: 10px; height: 10px; border-radius: 2px;
+    }
+    .det-bar .name {
+      font-weight: 600; color: var(--ink);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .det-bar .track {
+      position: relative; height: 14px;
+      background: var(--bg-tint); border-radius: 3px;
+      border: 1px solid var(--line); overflow: hidden;
+    }
+    .det-bar .fill {
+      position: absolute; left: 0; top: 0; bottom: 0;
+      border-radius: 2px 0 0 2px;
+      transition: width 160ms ease-out;
+    }
+    .det-bar .conf {
+      text-align: right; color: var(--ink-2); font-size: 11.5px;
+    }
+    .det-empty {
+      margin-top: 10px; font-size: 12px;
+      color: var(--ink-4); font-style: italic;
+    }
+
+    /* Per-class score grid (ported from L1) */
+    .scale-grid {
+      display: grid;
+      grid-template-columns: calc(88px * var(--scale-grid-cell-scale)) repeat(3, 1fr);
+      gap: calc(8px * var(--scale-grid-cell-scale));
+      background: var(--bg-tint);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: calc(12px * var(--scale-grid-cell-scale));
+      align-items: stretch;
+      width: calc(100% * var(--scale-grid-cell-scale));
+    }
+    .scale-grid-header {
+      font-size: 11px; font-weight: 600; color: var(--ink-3);
+      text-align: center; padding: 4px 0;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .scale-grid-header.first { text-align: left; padding-left: 4px; }
+    .scale-grid-header .sub {
+      display: block; font-weight: 400; color: var(--ink-4);
+      font-size: 10px; text-transform: none; letter-spacing: 0; margin-top: 1px;
+    }
+    .scale-grid-class {
+      display: flex; flex-direction: column; justify-content: center;
+      padding: 0 4px; font-size: 12px; color: var(--ink);
+    }
+    .scale-grid-class .cls-name { font-weight: 600; }
+    .scale-grid-class .cls-peak {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px; color: var(--ink-3); margin-top: 2px;
+    }
+    .scale-grid-cell {
+      position: relative; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 4px;
+      overflow: hidden; aspect-ratio: 3 / 4;
+      transition: border-color 120ms, box-shadow 120ms;
+    }
+    .scale-grid-cell.is-peak {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+    }
+    .scale-grid-cell.faint { opacity: 0.55; }
+    .scale-grid-cell img {
+      display: block; width: 100%; height: 100%; object-fit: cover;
+    }
+    .scale-grid-cell .cell-score {
+      position: absolute; bottom: 3px; right: 3px;
+      background: rgba(15,23,42,.78); color: white;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 9.5px; padding: 1px 4px;
+      border-radius: 2px; line-height: 1.4;
+    }
+    .scale-grid-imgrow {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: calc(88px * var(--scale-grid-cell-scale)) repeat(3, 1fr);
+      gap: calc(8px * var(--scale-grid-cell-scale));
+      align-items: stretch;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 6px;
+    }
+    .scale-grid-imgrow > div:first-child {
+      align-self: end; padding-bottom: 6px;
+    }
+    .scale-grid-imgrow .scale-ref {
+      width: 100%; aspect-ratio: 3 / 4; height: auto;
+      object-fit: cover; border-radius: 4px;
+      border: 1px solid var(--line);
+    }
+
+    .detect-classes-control {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12px; color: var(--ink-2); margin-bottom: 12px;
+    }
+    .detect-classes-control input[type="number"] {
+      width: 56px; padding: 3px 6px; font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      border: 1px solid var(--line); border-radius: 4px;
+      background: var(--panel); color: var(--ink);
+    }
+
+    /* ============== SETTINGS PANEL ============== */
+    .settings-toggle {
+      margin-left: 12px; padding: 4px 10px;
+      font-size: 12px; font-weight: 500;
+      border: 1px solid var(--line); background: var(--panel);
+      color: var(--ink-2); border-radius: 6px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .settings-toggle:hover {
+      border-color: var(--accent); color: var(--accent);
+    }
+    .settings-panel {
+      position: absolute; top: 0; left: 0; bottom: 0;
+      width: 320px;
+      background: var(--panel); border-right: 1px solid var(--line);
+      box-shadow: 8px 0 32px rgba(15,23,42,.06);
+      overflow-y: auto; z-index: 30;
+      animation: panel-slide-in 280ms cubic-bezier(.16,1,.3,1);
+    }
+    .settings-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px; border-bottom: 1px solid var(--line);
+      position: sticky; top: 0; background: var(--panel); z-index: 1;
+    }
+    .settings-header strong { font-size: 14px; }
+    .settings-reset {
+      font-size: 11px; padding: 3px 8px;
+      border: 1px solid var(--line); border-radius: 4px;
+      background: var(--panel); color: var(--ink-2);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .settings-reset:hover { border-color: var(--accent); color: var(--accent); }
+    .settings-body { padding: 14px 18px; }
+    .settings-group {
+      margin-bottom: 18px; padding-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .settings-group:last-child { border-bottom: none; }
+    .settings-group-label {
+      font-size: 11px; color: var(--ink-3); font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+    .settings-group-hint {
+      font-size: 11px; color: var(--ink-3); line-height: 1.4;
+      margin: -4px 0 10px; opacity: 0.85;
+    }
+    .settings-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; padding: 3px 0; font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .settings-row label { color: var(--ink-2); font-weight: 500; }
+    .settings-row label code {
+      font-size: 10px; color: var(--ink-4); margin-left: 4px;
+    }
+    .settings-row input[type="number"],
+    .settings-row input[type="text"] {
+      width: 72px; padding: 3px 6px; font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      border: 1px solid var(--line); border-radius: 4px;
+      background: var(--panel); color: var(--ink); text-align: right;
+    }
+    .settings-row input[type="color"] {
+      width: 32px; height: 24px; padding: 0;
+      border: 1px solid var(--line); border-radius: 4px;
+      cursor: pointer; background: transparent;
+    }
+    .settings-palette-row {
+      display: grid;
+      grid-template-columns: 70px repeat(3, 1fr);
+      gap: 8px; align-items: center;
+      padding: 4px 0;
+      font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .settings-palette-type {
+      color: var(--ink); font-weight: 600;
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .settings-palette-slot {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+    }
+    .settings-palette-slot input[type="color"] {
+      width: 100%; height: 22px; padding: 0;
+      border: 1px solid var(--line); border-radius: 4px; cursor: pointer;
+      background: transparent;
+    }
+    .settings-palette-slot .slot-label {
+      font-size: 9px; color: var(--ink-4); letter-spacing: 0.04em;
+    }
+
+    /* Top-K control above the channel stack */
+    .topk-control {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: var(--ink-3);
+      font-family: 'IBM Plex Mono', monospace;
+    }
+    .topk-control input[type="number"] {
+      width: 52px; padding: 2px 6px; font-size: 12px;
+      font-family: 'IBM Plex Mono', monospace;
+      border: 1px solid var(--line); border-radius: 4px;
+      background: var(--panel); color: var(--ink); text-align: right;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Upload button + build-progress overlay (server mode only).         */
+    /* ------------------------------------------------------------------ */
+    .upload-btn { margin-right: 4px; }
+    .upload-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .upload-overlay-backdrop {
+      position: absolute; inset: 0;
+      background: rgba(28, 32, 40, 0.55);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 200;
+      backdrop-filter: blur(2px);
+    }
+    .upload-overlay {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      box-shadow: var(--shadow-md);
+      width: min(560px, 92vw);
+      max-height: 88vh;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+      color: var(--ink);
+    }
+    .upload-overlay-header {
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+    }
+    .upload-overlay-elapsed {
+      margin-left: auto;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px; color: var(--ink-3);
+    }
+    .upload-overlay-close {
+      background: transparent; border: 0;
+      font-size: 20px; line-height: 1; cursor: pointer;
+      color: var(--ink-3); padding: 0 2px;
+    }
+    .upload-overlay-close:hover { color: var(--ink); }
+    .upload-overlay-body {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 16px;
+      padding: 16px;
+    }
+    .upload-overlay-thumb {
+      display: flex; flex-direction: column; gap: 6px; align-items: center;
+    }
+    .upload-overlay-thumb img {
+      width: 100%; height: 160px; object-fit: contain;
+      background: var(--graph-bg);
+      border-radius: 6px;
+      border: 1px solid var(--line);
+    }
+    .upload-overlay-filename {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px; color: var(--ink-3);
+      max-width: 100%; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap;
+    }
+    .upload-overlay-stages {
+      display: flex; flex-direction: column; gap: 8px;
+      font-size: 13px;
+    }
+    .upload-overlay-stage {
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 8px; align-items: center;
+      color: var(--ink-3);
+    }
+    .upload-overlay-stage.active { color: var(--ink); font-weight: 500; }
+    .upload-overlay-stage.done { color: var(--ink-2); }
+    .upload-overlay-stage-marker {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; font-size: 12px;
+    }
+    .upload-overlay-stage.done .upload-overlay-stage-marker { color: #2e8b57; }
+    .upload-overlay-stage.active .upload-overlay-stage-marker { color: var(--accent); }
+    .upload-overlay-bar {
+      grid-column: 2 / -1;
+      width: 100%; height: 4px;
+      background: var(--code-bg); border-radius: 2px; overflow: hidden;
+      margin-top: 2px;
+    }
+    .upload-overlay-bar-fill {
+      height: 100%; background: var(--accent);
+      transition: width 120ms ease-out;
+    }
+    .upload-overlay-error {
+      grid-column: 1 / -1;
+      padding: 8px 10px;
+      background: rgba(200, 60, 60, 0.08);
+      border: 1px solid rgba(200, 60, 60, 0.4);
+      border-radius: 4px;
+      color: #b03030;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 12px;
+      white-space: pre-wrap; word-break: break-word;
+    }
+    .upload-overlay-done-summary {
+      grid-column: 1 / -1;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 11px; color: var(--ink-3);
+      padding-top: 4px;
+    }
+    .upload-overlay-footer {
+      display: flex; gap: 8px; justify-content: flex-end;
+      padding: 10px 16px;
+      border-top: 1px solid var(--line);
+      background: var(--bg-tint);
+    }
+    .upload-overlay-footer button {
+      padding: 6px 14px; font-size: 12px;
+      border: 1px solid var(--line); border-radius: 4px;
+      background: var(--panel); color: var(--ink); cursor: pointer;
+    }
+    .upload-overlay-footer button:hover { background: var(--code-bg); }
+    .upload-overlay-retry { border-color: var(--accent) !important; color: var(--accent) !important; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
+
+  <!-- Generated by `yolovex.block_spec`: specs + instances + edges as window.YV_SPEC -->
+  <script src="spec-data.js"></script>
+
+  <!-- Generated by `yolovex build-assets`: per-fx-node activations as window.YV_ACT -->
+  <script src="activations.js"></script>
+
+  <!-- Hand-curated per-class explainer text (window.YV_CONTENT) -->
+  <script src="content/blocks.js"></script>
+
+  <!-- Generated by `yolovex build-content`: per-class forward() source (window.YV_FORWARD) -->
+  <script src="content/forward.js"></script>
+
+  <!-- ELK layout engine (ADR-0001) — UMD global `ELK`, loaded before the jsx -->
+  <script src="vendor/elk.bundled.js"></script>
+
+  <script type="text/babel" src="arch.jsx"></script>
+  <script type="text/babel" src="layout.jsx"></script>
+  <!-- expand.jsx loaded for its reused graph-semantic helpers (window.YV._graphSem);
+       its legacy buildExpansion is unused on this page -->
+  <script type="text/babel" src="expand.jsx"></script>
+  <script type="text/babel" src="expand-elk.jsx"></script>
+  <!-- ELK fork of the renderer; sets window.YV.Graph (graph.jsx is NOT loaded here) -->
+  <script type="text/babel" src="graph-elk.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+</body>
+</html>

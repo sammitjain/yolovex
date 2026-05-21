@@ -80,4 +80,8 @@ assets/           # default sample image + uploaded images (uploads/)
 results/          # screenshots used in this README
 ```
 
-If you're curious about how this got built — earlier experiments, design notes, evolution from L1 → L2 → v2 — see [`DEVNOTES.md`](DEVNOTES.md).
+## Project docs
+
+- [`CONTEXT.md`](CONTEXT.md) — shared vocabulary for the diagram/layout domain (the canonical terms used throughout the frontend).
+- [`docs/adr/`](docs/adr/) — architectural decisions and their rationale (layout engine, design tokens, side-panel content model, hosting).
+- [`docs/DEVNOTES.archive.md`](docs/DEVNOTES.archive.md) — historical build notes (archived; describes an older frontend, kept for context only).

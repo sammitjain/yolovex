@@ -1,0 +1,786 @@
+// yolovex — SVG graph (ELK fork, ADR-0001). Identical to graph.jsx except the
+// in-Region expansion is built by the ASYNC ELK path
+// (window.YV.buildExpansionELK from expand-elk.jsx) instead of the synchronous
+// legacy buildExpansion. The expansion contract is the same, so every renderer
+// below is unchanged; only the resolution becomes a promise-driven effect (with
+// a stale-guard, and the previous layout kept until the new one resolves — no
+// flicker). Loaded by index-elk.html (which does NOT load graph.jsx); it sets
+// window.YV.Graph.
+
+const { useState, useRef, useEffect, useMemo, useCallback } = React;
+
+function formatShape(sh) {
+  if (Array.isArray(sh) && sh.length && typeof sh[0] === 'number') {
+    return sh.join('×');
+  }
+  return null;
+}
+
+function Graph({ selected, hover, playing, onSelect, onHover, onExpandedCountChange, onVisibleOrderChange, settingsRev = 0, theme = 'light', onToggleTheme }) {
+  // L1-block id derived from the unified hover/select payload; the styling
+  // logic below (edge dimming, lift, selected glow) is L1-only, so sub-node
+  // hovers still focus their parent block.
+  const hoveredIdx = hover ? hover.idx : null;
+  const selectedIdx = selected ? selected.idx : null;
+  const playingIdx = playing ? playing.idx : null;
+  const playingFx = (playing && playing.pathKey != null) ? (playing.fxKey || null) : null;
+  const V = window.YV;
+  const arch = useMemo(() => V.buildArch(), []);
+  const rawEdges = useMemo(() => V.buildEdges(), []);
+
+  // Expansion state — any number of blocks can be expanded in place at once.
+  // Within each expanded block, sub-nodes can be RECURSIVELY expanded too;
+  // `subExpandedMap` holds the set of sub-path keys peeled open per block.
+  const [expandedSet, setExpandedSet] = useState(() => new Set());
+  const [subExpandedMap, setSubExpandedMap] = useState(() => new Map());
+
+  const toggleExpand = useCallback((idx) => {
+    setExpandedSet(prev => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx); else next.add(idx);
+      return next;
+    });
+    // Collapsing the top-level block also forgets its inner expansions.
+    setSubExpandedMap(prev => {
+      if (!prev.has(idx)) return prev;
+      const next = new Map(prev);
+      next.delete(idx);
+      return next;
+    });
+  }, []);
+
+  const toggleSubExpand = useCallback((blockIdx, pathKey) => {
+    setSubExpandedMap(prev => {
+      const next = new Map(prev);
+      const set = new Set(next.get(blockIdx) || []);
+      if (set.has(pathKey)) set.delete(pathKey); else set.add(pathKey);
+      if (set.size === 0) next.delete(blockIdx);
+      else next.set(blockIdx, set);
+      return next;
+    });
+  }, []);
+
+  const collapseAll = useCallback(() => {
+    setExpandedSet(new Set());
+    setSubExpandedMap(new Map());
+  }, []);
+
+  // Build the laid-out internal sub-graph for each expanded block via the ASYNC
+  // ELK path. col-1 blocks (FPN-up) flip so their internal flow runs
+  // bottom-to-top like the column. ELK's layout() is promise-based, so this is
+  // an effect (not a useMemo): we resolve all expanded blocks in parallel, guard
+  // against stale resolutions with a request id, and keep the PREVIOUS map in
+  // state until the new one is ready (no flicker / no blank frame).
+  const [expansionMap, setExpansionMap] = useState({});
+  const reqIdRef = useRef(0);
+  useEffect(() => {
+    const myReq = ++reqIdRef.current;
+    let cancelled = false;
+    (async () => {
+      const m = {};
+      await Promise.all([...expandedSet].map(async (idx) => {
+        const b = arch[idx];
+        if (!b) return;
+        const ex = await V.buildExpansionELK(idx, {
+          flip: b.col === 1,
+          expansions: subExpandedMap.get(idx),
+        });
+        if (ex) m[idx] = ex;
+      }));
+      if (!cancelled && myReq === reqIdRef.current) setExpansionMap(m);
+    })();
+    return () => { cancelled = true; };
+  }, [expandedSet, subExpandedMap, arch, V]);
+
+  // Blocks that genuinely expanded (Detect / non-fx specs yield no expansion
+  // even if clicked, so count the realised regions, not the raw click set).
+  const expandedCount = Object.keys(expansionMap).length;
+
+  const { nodes, totalW, totalH } = useMemo(() => V.layoutGraph(arch, expansionMap), [arch, expansionMap, settingsRev]);
+  const edgeMeta = useMemo(() => V.buildEdgeMeta(rawEdges, arch), [rawEdges, arch]);
+  const containers = useMemo(() => V.computeContainers(arch, nodes), [arch, nodes, settingsRev]);
+  const skipSources = useMemo(() => {
+    const s = new Set();
+    rawEdges.forEach(e => { if (e.is_skip) s.add(e.src); });
+    return s;
+  }, [rawEdges]);
+
+  // Surface the expanded count to the parent (for the header hint).
+  useEffect(() => {
+    if (onExpandedCountChange) onExpandedCountChange(expandedCount);
+  }, [expandedCount, onExpandedCountChange]);
+
+  // Surface the visible play-flow order to the parent — dataflow order over
+  // exactly the blocks/sub-nodes that are currently rendered on the canvas.
+  // Each entry is a payload identical to what onHover/onSelect dispatch.
+  const visibleOrder = useMemo(() => {
+    const order = [];
+    for (const b of arch) {
+      const ex = expansionMap[b.idx];
+      if (ex && ex.subNodes && ex.subNodes.length) {
+        for (const sn of ex.subNodes) {
+          const members = sn.members || [sn.id];
+          const fxKey = members[members.length - 1];
+          const firstFxKey = members[0];
+          order.push({
+            idx: b.idx,
+            pathKey: sn.pathKey,
+            fxKey,
+            firstFxKey,
+            members,
+            subkind: sn.subkind || 'sub',
+          });
+        }
+      } else {
+        order.push({ idx: b.idx, pathKey: null });
+      }
+    }
+    return order;
+  }, [arch, expansionMap]);
+
+  useEffect(() => {
+    if (onVisibleOrderChange) onVisibleOrderChange(visibleOrder);
+  }, [visibleOrder, onVisibleOrderChange]);
+
+  // TYPE_COLORS / ROLE_COLORS are Proxy-backed live getters (see arch.jsx)
+  // so palette / theme changes pick up automatically when settingsRev bumps.
+  const { TYPE_COLORS, ROLE_COLORS } = V;
+  const LS = window.YV.LAYOUT_SETTINGS;
+  const ACCENT = LS.ACCENT_COLOR;
+  // referenced so the linter and useMemo dep tracker see palette identity changes
+  void settingsRev;
+  const EDGE_DEFAULT = LS.EDGE_COLOR_DEFAULT;
+  const EDGE_DIMMED = LS.EDGE_COLOR_DIMMED;
+  const EDGE_FOCUSED = LS.EDGE_COLOR_FOCUSED;
+  const SW_DEFAULT = LS.EDGE_STROKE_DEFAULT;
+  const SW_FOCUSED = LS.EDGE_STROKE_FOCUSED;
+  const CONTAINER_DASH = LS.CONTAINER_DASH;
+
+  const containerRef = useRef(null);
+  const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
+  const [containerSize, setContainerSize] = useState({ w: 1000, h: 720 });
+  const [didFit, setDidFit] = useState(false);
+  const draggingRef = useRef(null);
+
+  // Track container size.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const r = el.getBoundingClientRect();
+      setContainerSize({ w: r.width, h: r.height });
+    });
+    ro.observe(el);
+    const r = el.getBoundingClientRect();
+    setContainerSize({ w: r.width, h: r.height });
+    return () => ro.disconnect();
+  }, []);
+
+  // Fit to screen — fit horizontally, cap zoom at 1, anchor near top.
+  const fit = useCallback(() => {
+    const padX = 32;
+    const k = Math.min((containerSize.w - padX * 2) / totalW, 1);
+    const x = (containerSize.w - totalW * k) / 2;
+    setTransform({ x, y: 24, k });
+  }, [containerSize, totalW]);
+
+  useEffect(() => {
+    if (!didFit && containerSize.w > 100) {
+      fit();
+      setDidFit(true);
+    }
+  }, [containerSize, didFit, fit]);
+
+  // Wheel zoom, centred on the cursor.
+  const onWheel = useCallback((e) => {
+    e.preventDefault();
+    const rect = containerRef.current.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    setTransform(t => {
+      const factor = Math.exp(-e.deltaY * 0.0015);
+      const newK = Math.max(0.3, Math.min(2.5, t.k * factor));
+      return {
+        x: mx - (mx - t.x) * (newK / t.k),
+        y: my - (my - t.y) * (newK / t.k),
+        k: newK,
+      };
+    });
+  }, []);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [onWheel]);
+
+  // Drag pan (on background only).
+  const onMouseDown = (e) => {
+    if (e.target.closest('[data-node]')) return;
+    draggingRef.current = { startX: e.clientX, startY: e.clientY, t: transform };
+  };
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!draggingRef.current) return;
+      const d = draggingRef.current;
+      setTransform({
+        x: d.t.x + (e.clientX - d.startX),
+        y: d.t.y + (e.clientY - d.startY),
+        k: d.t.k,
+      });
+    };
+    const onUp = () => { draggingRef.current = null; };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
+
+  // Edge accent + neighbor dimming follow hover/selection only — during a flow
+  // play we just glow the playing node itself, without changing the rest of
+  // the canvas (otherwise the whole graph dims/redraws every step).
+  const focusIdx = hoveredIdx ?? selectedIdx;
+  const isEdgeFocused = (e) => focusIdx != null && (e.src === focusIdx || e.dst === focusIdx);
+  const connectedTo = (idx, other) =>
+    edgeMeta.some(e => (e.src === idx && e.dst === other) || (e.dst === idx && e.src === other));
+
+  return (
+    <div
+      ref={containerRef}
+      className="graph-container"
+      onMouseDown={onMouseDown}
+      style={{
+        cursor: draggingRef.current ? 'grabbing' : 'grab',
+        // Canvas background is theme-aware via LS.GRAPH_BG (rebased per theme in
+        // app.jsx toggleTheme). Inline override beats the CSS --graph-bg var.
+        background: LS.GRAPH_BG || undefined,
+      }}
+    >
+      <svg width={containerSize.w} height={containerSize.h} style={{ display: 'block' }}>
+        <defs>
+          <marker id="arrow-gray" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill={EDGE_DEFAULT} />
+          </marker>
+          <marker id="arrow-accent" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill={ACCENT} />
+          </marker>
+          <marker id="arrow-dim" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill={EDGE_DEFAULT} opacity="0.35" />
+          </marker>
+          {/* Three named state filters — replaces the old node-shadow/node-glow
+              pair so hover, selected, and playing each occupy their own visual
+              register (subtle drop / warm ambient glow / beacon glow). */}
+          <filter id="node-hover" x="-40%" y="-40%" width="180%" height="180%">
+            <feDropShadow dx="0" dy="3" stdDeviation="5" floodOpacity="0.13" />
+          </filter>
+          <filter id="node-selected" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="2" stdDeviation="7" floodColor={ACCENT} floodOpacity="0.28" />
+          </filter>
+          <filter id="node-playing" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="0" stdDeviation="11" floodColor={ACCENT} floodOpacity="0.72" />
+          </filter>
+        </defs>
+
+        <g transform={`translate(${transform.x}, ${transform.y}) scale(${transform.k})`}>
+          {/* Role containers — Backbone/Head rects, Neck mirrored-L polygon. */}
+          {containers.map(c => (
+            <g key={c.role}>
+              {c.kind === 'rect' ? (
+                <rect
+                  x={c.x} y={c.y} width={c.w} height={c.h}
+                  fill="none" stroke={ROLE_COLORS[c.role]} strokeWidth="1.2"
+                  strokeDasharray={CONTAINER_DASH} rx="14" opacity="0.55"
+                />
+              ) : (
+                <path
+                  d={c.path}
+                  fill="none" stroke={ROLE_COLORS[c.role]} strokeWidth="1.2"
+                  strokeDasharray={CONTAINER_DASH} opacity="0.55"
+                />
+              )}
+              <text
+                x={c.labelX} y={c.labelY}
+                fontSize="12" fontWeight="600" fill={ROLE_COLORS[c.role]}
+                style={{ letterSpacing: '0.06em', textTransform: 'uppercase' }}
+              >
+                {c.role}
+              </text>
+            </g>
+          ))}
+
+          {/* Edges — one L1 edge may render as multiple paths when the source
+              or target is expanded with multi-exit / multi-entry internal
+              nodes (e.g. SPPF's placeholder feeds both cv1 and the residual). */}
+          {edgeMeta.flatMap((e, i) => {
+            const paths = V.edgePaths(e, nodes, arch);
+            const focused = isEdgeFocused(e);
+            const isAccent = e.kind === 'skip' || e.kind === 'detect';
+            const stroke = focused ? EDGE_FOCUSED : (isAccent ? ACCENT : EDGE_DEFAULT);
+            const opacity = focusIdx != null && !focused ? 0.18 : (isAccent ? 0.85 : 0.55);
+            const sw = focused ? SW_FOCUSED : (isAccent ? SW_DEFAULT * 1.25 : SW_DEFAULT);
+            const marker = focused
+              ? 'url(#arrow-accent)'
+              : (focusIdx != null ? 'url(#arrow-dim)' : (isAccent ? 'url(#arrow-accent)' : 'url(#arrow-gray)'));
+            return paths.map((d, j) => (
+              <path
+                key={`${i}-${j}`}
+                d={d}
+                fill="none"
+                stroke={stroke}
+                strokeWidth={sw}
+                opacity={opacity}
+                markerEnd={marker}
+                style={{ transition: 'stroke 200ms, opacity 200ms, stroke-width 200ms' }}
+              />
+            ));
+          })}
+
+          {/* Nodes */}
+          {arch.map(b => (
+            <Node
+              key={b.idx}
+              block={b}
+              node={nodes[b.idx]}
+              hovered={hoveredIdx === b.idx}
+              selected={selectedIdx === b.idx}
+              playing={playingIdx === b.idx}
+              playingFx={playingIdx === b.idx ? playingFx : null}
+              dimmed={focusIdx != null && focusIdx !== b.idx && !connectedTo(focusIdx, b.idx)}
+              isSkipSource={skipSources.has(b.idx)}
+              colorScheme={TYPE_COLORS[b.type] || TYPE_COLORS.Conv}
+              theme={theme}
+              onHover={onHover}
+              onSelect={onSelect}
+              onToggleExpand={toggleExpand}
+              onToggleSubExpand={toggleSubExpand}
+              accent={ACCENT}
+            />
+          ))}
+
+          {/* Input image marker (left of the backbone). Theme-aware so the
+              neutral fill doesn't disappear into the dark canvas. */}
+          {(() => {
+            const inputFill   = theme === 'dark' ? '#1a2535' : '#f0ede8';
+            const inputStroke = theme === 'dark' ? '#304555' : '#c0bab2';
+            const inputText   = theme === 'dark' ? '#5a7a96' : '#7a7470';
+            return (
+              <>
+                <g transform={`translate(${nodes[0].x - 110}, ${nodes[0].y - 4})`}>
+                  <rect width="80" height="60" rx="6" fill={inputFill} stroke={inputStroke} strokeWidth="1" />
+                  <text x="40" y="34" fontSize="9" fill={inputText} textAnchor="middle" fontFamily="ui-monospace, monospace">input</text>
+                  <text x="40" y="46" fontSize="9" fill={inputText} textAnchor="middle" fontFamily="ui-monospace, monospace">1×3×640×480</text>
+                </g>
+                <path
+                  d={`M ${nodes[0].x - 30} ${nodes[0].y + 26} L ${nodes[0].x} ${nodes[0].y + 26}`}
+                  stroke={EDGE_DEFAULT} strokeWidth="1" opacity="0.5" fill="none"
+                  markerEnd="url(#arrow-gray)"
+                />
+              </>
+            );
+          })()}
+        </g>
+      </svg>
+
+      {/* Zoom controls */}
+      <div className="zoom-controls">
+        <button onClick={() => setTransform(t => ({ ...t, k: Math.min(2.5, t.k * 1.2) }))} title="Zoom in">+</button>
+        <button onClick={() => setTransform(t => ({ ...t, k: Math.max(0.3, t.k / 1.2) }))} title="Zoom out">−</button>
+        <button onClick={fit} title="Fit to screen" className="fit-btn">⤢</button>
+        {expandedCount > 0 && (
+          <button onClick={collapseAll} title="Collapse all expanded blocks" className="fit-btn">⊟</button>
+        )}
+        {onToggleTheme && (
+          <button onClick={onToggleTheme} className="theme-btn"
+            title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
+            {theme === 'dark' ? '☀' : '☾'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Node({ block, node, hovered, selected, playing, playingFx, dimmed, isSkipSource, colorScheme, theme, onHover, onSelect, onToggleExpand, onToggleSubExpand, accent }) {
+  // Only "playing" lifts; hover stays at scale 1 (heavier type-colored border
+  // is the hover cue instead). This separates the three interaction states
+  // into distinct visual registers.
+  const lift = (playing && !node.expanded) ? 1.05 : 1;
+  const opacity = dimmed ? 0.35 : 1;
+  const isDetect = block.type === 'Detect';
+  const shape = formatShape(block.outputShape);
+  const expanded = !!node.expanded;
+
+  return (
+    <g
+      data-node={block.idx}
+      transform={`translate(${node.x}, ${node.y})`}
+      style={{ cursor: 'pointer', opacity, transition: 'opacity 200ms' }}
+      onMouseEnter={() => onHover({ idx: block.idx, pathKey: null })}
+      onMouseLeave={() => onHover(null)}
+      onClick={(e) => {
+        // Shift+click expands/collapses; bare left-click opens the activation
+        // panel. Sub-nodes / containers stopPropagation, so bare clicks on the
+        // region background still hit this handler.
+        e.stopPropagation();
+        if (e.shiftKey) onToggleExpand(block.idx);
+        else onSelect({ idx: block.idx, pathKey: null });
+      }}
+    >
+      {expanded ? (
+        <ExpandedNode
+          block={block}
+          node={node}
+          colorScheme={colorScheme}
+          accent={accent}
+          playingFx={playingFx}
+          theme={theme}
+          onHover={onHover}
+          onSelect={onSelect}
+          onToggleSubExpand={onToggleSubExpand}
+        />
+      ) : (
+        <g
+          style={{
+            transformOrigin: `${node.w / 2}px ${node.h / 2}px`,
+            transform: `scale(${lift})`,
+            transition: 'transform 180ms cubic-bezier(.4,0,.2,1), filter 160ms',
+            filter: playing  ? 'url(#node-playing)'
+                  : selected ? 'url(#node-selected)'
+                  : hovered  ? 'url(#node-hover)'
+                  : 'none',
+          }}
+        >
+          {isDetect ? (
+            <DetectNode node={node} colorScheme={colorScheme} highlight={selected || hovered} accent={accent} />
+          ) : (
+            <>
+              <rect
+                width={node.w} height={node.h} rx="8"
+                fill={colorScheme.fill}
+                stroke={(selected || playing) ? accent : colorScheme.border}
+                strokeWidth={playing ? 3 : selected ? 2.5 : hovered ? 2 : 1}
+              />
+              <text x="12" y="22" fontSize="11" fontWeight="500" fill={colorScheme.text}
+                fontFamily="ui-monospace, SFMono-Regular, monospace" opacity="0.7">
+                [{block.idx}]
+              </text>
+              <text x="38" y="22" fontSize={colorScheme.textSize || 13} fontWeight="600" fill={colorScheme.text}>
+                {block.type}
+              </text>
+              {shape && (
+                <text x="12" y="44" fontSize="10.5" fill={colorScheme.text}
+                  fontFamily="ui-monospace, SFMono-Regular, monospace" opacity="0.85">
+                  {shape}
+                </text>
+              )}
+              {isSkipSource && (
+                <circle cx={node.w - 10} cy={10} r={3.5} fill={accent} opacity="0.85">
+                  <title>This block is a skip-connection source</title>
+                </circle>
+              )}
+            </>
+          )}
+        </g>
+      )}
+    </g>
+  );
+}
+
+// Expanded block — the region box (block label up top) with its internal
+// component sub-graph rendered inside. All sub-node / sub-edge coords are
+// LOCAL to the region, so they sit inside the node's translate(node.x,node.y).
+// Collect fx node names whose visible_path begins with `containerPath`, in
+// graph order. The container's "output" is the last such node; the "input
+// boundary" is the first one. Used by hover / click on an inner container
+// rect so it reports the container's OWN activation — i.e. the tensor that
+// would be produced if you hadn't peeled it open.
+function fxMembersInContainer(specId, containerPath) {
+  if (!specId || !containerPath || !containerPath.length) return [];
+  const spec = window.YV_SPEC?.specs?.[specId];
+  if (!spec) return [];
+  const out = [];
+  for (const n of spec.graph.nodes) {
+    if (n.op === 'placeholder' || n.op === 'output' || n.op === 'get_attr') continue;
+    const vp = n.visible_path || n.path || [];
+    if (vp.length < containerPath.length) continue;
+    let match = true;
+    for (let i = 0; i < containerPath.length; i++) {
+      if (vp[i] !== containerPath[i]) { match = false; break; }
+    }
+    if (match) out.push(n.name);
+  }
+  return out;
+}
+
+// Inner-container chrome stepped by depth: depth-1 is the outermost peel,
+// depth-2 sits inside that, depth-3+ is anything deeper (clamped). Fills get
+// slightly denser and dashes get tighter as you descend, signaling "you are
+// deeper" without competing with the block's type color (which dresses the
+// outermost expanded region itself).
+// Nesting-container depth bands. Fill/stroke COLOURS are no longer used at
+// render time — the container inherits its block's family colour (see
+// ExpandedNode). Only `fOpacity` (depth shading) and `sw` (border weight) are
+// read; the colour fields are kept so the Settings drawer's existing editor
+// stays valid and `reset` round-trips. Light fills are pale, so opacity climbs
+// gently; dark fills are deep, so they need higher opacity to register.
+const IC_STYLES = {
+  light: [
+    { fill: '#000000', fOpacity: 0.12, stroke: '#000000', sw: 1.4, dash: '' },
+    { fill: '#000000', fOpacity: 0.20, stroke: '#000000', sw: 1.2, dash: '' },
+    { fill: '#000000', fOpacity: 0.28, stroke: '#000000', sw: 1.0, dash: '' },
+  ],
+  dark: [
+    { fill: '#000000', fOpacity: 0.45, stroke: '#000000', sw: 1.4, dash: '' },
+    { fill: '#000000', fOpacity: 0.60, stroke: '#000000', sw: 1.2, dash: '' },
+    { fill: '#000000', fOpacity: 0.75, stroke: '#000000', sw: 1.0, dash: '' },
+  ],
+};
+// Expose for Settings drawer + theme swap to mirror into LS.NESTING_TINTS.
+window.YV.NESTING_TINT_SETS = IC_STYLES;
+const _cloneTints = (arr) => arr.map(o => ({ ...o }));
+if (!('NESTING_TINTS' in window.YV.LAYOUT_SETTINGS)) {
+  window.YV.LAYOUT_SETTINGS.NESTING_TINTS = _cloneTints(IC_STYLES.light);
+}
+if (!('EXPANDABLE_DASH' in window.YV.LAYOUT_SETTINGS)) {
+  window.YV.LAYOUT_SETTINGS.EXPANDABLE_DASH = '6 3';
+}
+
+function ExpandedNode({ block, node, colorScheme, accent, playingFx, theme, onHover, onSelect, onToggleSubExpand }) {
+  // Inner sub-node palette + nesting-band styles flow through LAYOUT_SETTINGS
+  // so the Settings drawer can recolor them live. Theme swap (app.jsx) rebases
+  // both from the matching IC_STYLES / INNER_PALETTES preset.
+  const LS = window.YV.LAYOUT_SETTINGS;
+  const SKC = LS.INNER_PALETTE || (theme === 'dark' ? window.YV.SUB_KIND_COLORS_DARK : window.YV.SUB_KIND_COLORS_LIGHT);
+  const { subFormatShape } = window.YV;
+  const icSet = LS.NESTING_TINTS || IC_STYLES[theme] || IC_STYLES.light;
+  const region = node.region;
+  return (
+    <g>
+      {/* Region container — reuses the block's family colour (fill + border)
+          so an expanded block still reads as "the same block, opened". Solid
+          border (no dash); depth is conveyed by the nesting containers within. */}
+      <rect
+        width={node.w} height={node.h} rx="10"
+        fill={colorScheme.fill} fillOpacity="0.35"
+        stroke={colorScheme.border} strokeWidth="1.5"
+      />
+      <text x="12" y="19" fontSize="11" fontWeight="500" fill={colorScheme.text}
+        fontFamily="ui-monospace, SFMono-Regular, monospace" opacity="0.7">
+        [{block.idx}]
+      </text>
+      <text x="38" y="19" fontSize="12.5" fontWeight="600" fill={colorScheme.text}>
+        {block.type}
+      </text>
+
+      {/* Inner containers — drawn FIRST so edges + nodes paint on top.
+          Hovering / clicking the rect surfaces the container's OWN activation
+          (the output tensor of its last fx node — same as before this group
+          was peeled open). The ▴ label is a dedicated collapse affordance. */}
+      {(region.innerContainers || []).map(ic => {
+        const members = fxMembersInContainer(block.specId, ic.path);
+        const fxKey = members.length ? members[members.length - 1] : null;
+        const firstFxKey = members.length ? members[0] : null;
+        const payload = { idx: block.idx, pathKey: ic.pathKey, fxKey, firstFxKey, members, subkind: 'container' };
+        const onEnter = (e) => { e.stopPropagation(); onHover && onHover(payload); };
+        const onLeave = (e) => { e.stopPropagation(); onHover && onHover(null); };
+        const onClickRect = (e) => {
+          e.stopPropagation();
+          if (e.shiftKey) onToggleSubExpand(block.idx, ic.pathKey);
+          else onSelect && onSelect(payload);
+        };
+        // ic.depth = path length (1 = outermost peel inside the block, 2 = one
+        // level deeper, 3+ = clamped). Nesting containers reuse the block's
+        // FAMILY colour (so the expansion still reads as one block); depth is
+        // conveyed purely by fill opacity (denser = deeper). Solid border, no
+        // dash. The per-depth opacity + stroke-width come from
+        // LAYOUT_SETTINGS.NESTING_TINTS[depth] — that's the knob to tune depth
+        // shading in the Settings drawer.
+        const s = icSet[Math.min((ic.depth || 1) - 1, icSet.length - 1)];
+        return (
+          <g key={`ic-${ic.pathKey}`}>
+            <rect
+              x={ic.x} y={ic.y} width={ic.w} height={ic.h} rx="8"
+              fill={colorScheme.fill} fillOpacity={s.fOpacity}
+              stroke={colorScheme.border} strokeWidth={s.sw}
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={onEnter}
+              onMouseLeave={onLeave}
+              onClick={onClickRect}
+            />
+            <text
+              x={ic.x + ic.w - 10} y={ic.y + 14}
+              fontSize="10.5" fontWeight="600" fill={colorScheme.text}
+              fontFamily="ui-monospace, monospace" textAnchor="end"
+              style={{ cursor: 'pointer' }}
+              onClick={(e) => { e.stopPropagation(); onToggleSubExpand(block.idx, ic.pathKey); }}
+            >
+              {ic.label} ▴
+            </text>
+          </g>
+        );
+      })}
+
+      {/* Internal sub-edges */}
+      {region.subEdges.map((e, i) => (
+        <g key={`se-${i}`}>
+          <path
+            d={e.path}
+            fill="none"
+            stroke={e.accent ? accent : '#94a3b8'}
+            strokeWidth={e.accent ? 1.6 : 1.4}
+            markerEnd={e.accent ? 'url(#arrow-accent)' : 'url(#arrow-gray)'}
+          />
+          {e.label && e.labelPos && (
+            <text x={e.labelPos.x} y={e.labelPos.y} fontSize="10"
+              fontFamily="ui-monospace, monospace" fill="#475569">
+              [{e.label}]
+            </text>
+          )}
+        </g>
+      ))}
+
+      {/* Internal sub-nodes */}
+      {region.subNodes.map(sn => {
+        // Sub-node is the play-flow's current step if its last fx member or
+        // its pathKey matches the playing payload.
+        const members = sn.members || [sn.id];
+        const isPlaying = !!playingFx && (
+          playingFx === members[members.length - 1] ||
+          playingFx === members[0] ||
+          members.includes(playingFx)
+        );
+        return (
+          <SubNode
+            key={sn.id}
+            sn={sn}
+            blockIdx={block.idx}
+            playing={isPlaying}
+            accent={accent}
+            onHover={onHover}
+            onSelect={onSelect}
+            onToggleSubExpand={onToggleSubExpand}
+            SUB_KIND_COLORS={SKC}
+            subFormatShape={subFormatShape}
+          />
+        );
+      })}
+    </g>
+  );
+}
+
+function SubNode({ sn, blockIdx, playing, accent, onHover, onSelect, onToggleSubExpand, SUB_KIND_COLORS, subFormatShape }) {
+  const sk = sn.subkind;
+  const expandable = sn.expandable;
+  // Lookup key for activations: the last fx-graph member of this group. For a
+  // fully-revealed leaf, members[0] === sn.id. For an aggregated group the
+  // last member's output IS the group's output tensor (matches the shape
+  // already shown on the node).
+  const members = sn.members || [sn.id];
+  const fxKey = members[members.length - 1];
+  const firstFxKey = members[0];
+  const hoverPayload = { idx: blockIdx, pathKey: sn.pathKey, fxKey, firstFxKey, members, subkind: sk };
+  const onEnter = onHover ? (e) => { e.stopPropagation(); onHover(hoverPayload); } : undefined;
+  const onLeave = onHover ? (e) => { e.stopPropagation(); onHover(null); } : undefined;
+  const handleClick = (e) => {
+    e.stopPropagation();
+    if (e.shiftKey && expandable) {
+      onToggleSubExpand(blockIdx, sn.pathKey);
+    } else if (onSelect) {
+      onSelect(hoverPayload);
+    }
+  };
+  const cursor = 'pointer';
+
+  if (sk === 'arith') {
+    const cx = sn.x + sn.w / 2, cy = sn.y + sn.h / 2;
+    return (
+      <g style={{ cursor }} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={handleClick}>
+        <circle cx={cx} cy={cy} r={sn.w / 2} fill="#fef3c7" stroke="#f59e0b" strokeWidth="1.5" />
+        <text x={cx} y={cy + 5} fontSize="15" fontWeight="700" fill="#78350f" textAnchor="middle">
+          {({ add: '+', mul: '×', sub: '−', truediv: '÷' }[sn.label] || sn.label.replace(/^fn:/, '') || '·')}
+        </text>
+      </g>
+    );
+  }
+
+  if (sk === 'attr' || sk === 'shape' || sk === 'struct') {
+    const fill   = sk === 'attr' ? '#ede9fe' : '#f1f5f9';
+    const stroke = sk === 'attr' ? '#a78bfa' : '#94a3b8';
+    const text   = sk === 'attr' ? '#4c1d95' : '#475569';
+    return (
+      <g style={{ cursor }} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={handleClick}>
+        <rect x={sn.x} y={sn.y} width={sn.w} height={sn.h} rx="4"
+          fill={fill} stroke={stroke} strokeWidth="1" />
+        <text x={sn.x + sn.w / 2} y={sn.y + sn.h / 2 + 4} fontSize="10.5" fill={text}
+          textAnchor="middle" fontFamily="ui-monospace, monospace">
+          {sn.label}
+        </text>
+      </g>
+    );
+  }
+
+  // Colour by module type first (Conv2d / BN / SiLU …), falling back to the
+  // op-subkind table for pure fx ops. Single source: arch.jsx getNodeStyle.
+  const c = window.YV.getNodeStyle(sn.targetClass, sk);
+  const sh = subFormatShape(sn.shape);
+  return (
+    <g style={{ cursor, filter: playing ? 'url(#node-playing)' : undefined }} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={handleClick}>
+      <rect x={sn.x} y={sn.y} width={sn.w} height={sn.h} rx="6"
+        fill={c.fill} stroke={playing ? accent : c.border} strokeWidth={playing ? 2.5 : (expandable ? 2 : 1.5)} />
+      <text x={sn.x + sn.w / 2} y={sn.y + sn.h / 2 + (sh ? -2 : 4)} fontSize={c.textSize || 12} fontWeight="600"
+        fill={c.text} textAnchor="middle">
+        {sn.label}
+      </text>
+      {sh && (
+        <text x={sn.x + sn.w / 2} y={sn.y + sn.h - 8} fontSize="9.5" fill={c.text}
+          opacity="0.65" textAnchor="middle" fontFamily="ui-monospace, monospace">
+          {sh}
+        </text>
+      )}
+      {/* Expandable indicator — small chevron in the top-right corner. Hint that shift+click peels open. */}
+      {expandable && (
+        <text x={sn.x + sn.w - 8} y={sn.y + 12} fontSize="11" fontWeight="700"
+          fill={c.text} opacity="0.75" textAnchor="end">
+          ▾
+        </text>
+      )}
+    </g>
+  );
+}
+
+// Detect head — three separate, normal-sized boxes (P3 / P4 / P5), not one
+// stretched node. Positions come from node.detect[i].relY (set in layout).
+function DetectNode({ node, colorScheme, highlight, accent }) {
+  const NH = window.YV.NODE_H;
+  return (
+    <g>
+      <text x="0" y="-12" fontSize="11" fontWeight="500" fill={colorScheme.text}
+        fontFamily="ui-monospace, SFMono-Regular, monospace" opacity="0.8">
+        [23] Detect
+      </text>
+      {(node.detect || []).map(box => (
+        <g key={box.scale} transform={`translate(0, ${box.relY})`}>
+          <rect
+            width={node.w} height={NH} rx="8"
+            fill={colorScheme.fill}
+            stroke={highlight ? accent : colorScheme.border}
+            strokeWidth={highlight ? 2 : 1}
+          />
+          <text x="14" y="23" fontSize="13" fontWeight="600" fill={colorScheme.text}>
+            {box.label}
+          </text>
+          <text x="14" y="42" fontSize="10.5" fill={colorScheme.text}
+            fontFamily="ui-monospace, SFMono-Regular, monospace" opacity="0.8">
+            {box.size} objects
+          </text>
+        </g>
+      ))}
+    </g>
+  );
+}
+
+window.YV = window.YV || {};
+window.YV.Graph = Graph;
