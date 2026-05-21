@@ -649,6 +649,7 @@ function autoLayout(nodes, edges, stairs) {
 
   return {
     positions,
+    rank,
     totalW: totalW + MARGIN,
     totalH: (Math.max(...rankKeys) + 1) * (NODE_H + ROW_GAP) + MARGIN,
     skipEdges,
@@ -952,18 +953,103 @@ function buildExpansion(idx, opts) {
 
   if (internalNodes.length === 0) return null;
 
-  // Normalize: translate so the internal bbox sits at (REGION_PAD_X,
-  // REGION_PAD_TOP). positions in `layout` are mutated copies — clone first.
+  // positions in `layout` are mutated copies — clone first.
   const pos = {};
   for (const n of internalNodes) {
     const p = layout.positions[n.id];
     pos[n.id] = { x: p.x, y: p.y, w: p.w, h: p.h };
   }
+  // Nesting depth of a node = how many inner containers enclose it (0 = on the
+  // region spine). Drives both the horizontal indent and the container-edge
+  // extents used for bbox / normalize below.
+  const depthOf = (n) => (n.containerPath && n.containerPath.length) || 0;
+
+  // Flip FIRST (col-1 / FPN-up runs bottom-to-top). Mirroring before the inset
+  // means the inset operates in FINAL visual orientation, so its downward
+  // title-gap reserve always lands on each container's visually-topmost child —
+  // flipped or not. Mirror within the raw band; normalize re-anchors absolute
+  // position afterwards, so the exact mirror reference doesn't matter.
+  if (flip) {
+    let rMinY = Infinity, rMaxB = -Infinity;
+    for (const n of internalNodes) { const p = pos[n.id]; rMinY = Math.min(rMinY, p.y); rMaxB = Math.max(rMaxB, p.y + p.h); }
+    for (const n of internalNodes) { const p = pos[n.id]; p.y = rMinY + rMaxB - (p.y + p.h); }
+  }
+
+  // ── Inner-container inset (deeper-expansion origin alignment) ──────────────
+  // An expanded sub-node's children would otherwise inherit the parent's exact
+  // slot, so computeInnerContainers draws the box OUTSET (childMin − pad), i.e.
+  // up-and-left of where the parent sat. To mirror how the L1 region works
+  // (top-left at the block's slot, children inset by REGION_PAD), reserve the
+  // same inset for every inner container here:
+  //   • vertical  — push each container's visually-topmost child (and every node
+  //     in/below its visual band) down by INNER_PAD_TOP, so containerTop
+  //     (= childMin − INNER_PAD_TOP) lands back on the parent's slot Y.
+  //   • horizontal — indent each node right by INNER_PAD_X per nesting level, so
+  //     containerLeft (= childMin − INNER_PAD_X) lands on the parent's slot X.
+  // Uses the FINAL-orientation visual band (rank, reversed when flipped) so it
+  // works in both column directions. Branch-offset nodes (fan-in/out, stairs)
+  // are intentionally left as the graph layout placed them — this only insets.
+  {
+    const rankOf = layout.rank || {};
+    let maxRank = 0;
+    for (const n of internalNodes) { const r = rankOf[n.id]; if (r != null && r > maxRank) maxRank = r; }
+    // Visual band: top-to-bottom order in the final orientation.
+    const bandOf = (n) => { const r = rankOf[n.id]; if (r == null) return null; return flip ? (maxRank - r) : r; };
+    // Every container path = each node's containerPath plus all its prefixes.
+    const containerPaths = new Map();   // key -> path array
+    for (const n of internalNodes) {
+      let p = (n.containerPath && n.containerPath.length) ? n.containerPath.slice() : null;
+      while (p && p.length) {
+        containerPaths.set(p.join('/'), p);
+        p = p.slice(0, -1);
+      }
+    }
+    const startsWith = (path, prefix) => {
+      if (path.length < prefix.length) return false;
+      for (let i = 0; i < prefix.length; i++) if (path[i] !== prefix[i]) return false;
+      return true;
+    };
+    // entryBand(container) = min visual band among nodes inside it. One
+    // INNER_PAD_TOP gap per container, booked at its entry band (nested
+    // containers sharing a band stack).
+    const extraTopAtBand = new Map();
+    for (const cp of containerPaths.values()) {
+      let entry = Infinity;
+      for (const n of internalNodes) {
+        if (!n.containerPath || !startsWith(n.containerPath, cp)) continue;
+        const b = bandOf(n);
+        if (b != null && b < entry) entry = b;
+      }
+      if (entry !== Infinity) extraTopAtBand.set(entry, (extraTopAtBand.get(entry) || 0) + INNER_PAD_TOP);
+    }
+    // Cumulative vertical offset: a node in band b drops by the sum of gaps
+    // booked at bands ≤ b. Combined with the depth-aware normalize below, this
+    // lands each inner container's TOP on its parent sub-node's old slot.
+    const sortedBands = [...extraTopAtBand.keys()].sort((a, b) => a - b);
+    for (const n of internalNodes) {
+      const b = bandOf(n);
+      if (b == null) continue;
+      let cum = 0;
+      for (const eb of sortedBands) { if (eb <= b) cum += extraTopAtBand.get(eb); else break; }
+      pos[n.id].x += INNER_PAD_X * depthOf(n);
+      pos[n.id].y += cum;
+    }
+  }
+
+  // bbox over CONTAINER edges, not bare node edges: a node at depth d has its
+  // enclosing container border INNER_PAD_X*d to its left / INNER_PAD_TOP*d above
+  // (and INNER_PAD_X*d right / INNER_PAD_BOTTOM*d below). Using these extents
+  // (a) sizes the region to fit the outermost container borders, and (b) makes
+  // normalize anchor the topmost CONTAINER edge (not the topmost node) to
+  // (REGION_PAD_X, REGION_PAD_TOP) — so the inset isn't cancelled back out.
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const n of internalNodes) {
     const p = pos[n.id];
-    minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
-    maxX = Math.max(maxX, p.x + p.w); maxY = Math.max(maxY, p.y + p.h);
+    const d = depthOf(n);
+    const L = p.x - INNER_PAD_X * d,            T = p.y - INNER_PAD_TOP * d;
+    const R = p.x + p.w + INNER_PAD_X * d,      B = p.y + p.h + INNER_PAD_BOTTOM * d;
+    minX = Math.min(minX, L); minY = Math.min(minY, T);
+    maxX = Math.max(maxX, R); maxY = Math.max(maxY, B);
   }
   const bboxW = maxX - minX, bboxH = maxY - minY;
   const regionW = bboxW + 2 * REGION_PAD_X;
@@ -972,14 +1058,6 @@ function buildExpansion(idx, opts) {
     const p = pos[n.id];
     p.x = p.x - minX + REGION_PAD_X;
     p.y = p.y - minY + REGION_PAD_TOP;
-  }
-
-  // Flip: mirror y so internal flow runs bottom-to-top.
-  if (flip) {
-    for (const n of internalNodes) {
-      const p = pos[n.id];
-      p.y = regionH - p.y - p.h;
-    }
   }
 
   // Sub-edge paths — recompute against the final (normalized + maybe flipped)
