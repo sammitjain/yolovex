@@ -71,27 +71,8 @@ previous block's last layer. That long edge may interfere with the placement of
 the expanded SPPF's first `Conv`/`cv1` node. Implement, then expect a feedback
 pass on exactly how the `add` and its incoming long edge resolve.
 
-## Implementation pointers
-
-- Lives in `frontend/expand-elk.jsx`, AFTER `await _elk.layout(root)` and BEFORE
-  building `subNodes` / `subEdges`.
-- Re-derive inner-container bboxes (`containerAbs`) from the SHIFTED node
-  positions, not ELK's, so nested Region frames still wrap their children.
-- Re-route edges from final node positions (replaces consuming ELK's
-  `sections`/bendPoints); keep `entryNodes`/`exitNodes` as the external
-  connection ports (layout.jsx reads them).
-- Keep the contract identical: `{subNodes, subEdges, innerContainers,
-  entryNodes, exitNodes, regionW, regionH, flip}`.
-
-## Current spike state (for the fresh session)
-
-Working in `frontend/expand-elk.jsx` + `graph-elk.jsx` + `index-elk.html`
-(legacy `index.html` untouched):
-- ELK layering + compound nesting + LCA-placed edges: working (stray/disappearing
-  edges at depth — SOLVED).
-- Merge-node widening by in-degree (`WIDEN_STEP`): in place; fan-out widening
-  intentionally removed (kept maxpools uniform).
-- `flip` (FPN-up col-1) via ELK `direction: UP`: confirmed correct.
-- Edge routing: currently ELK ORTHOGONAL bend-points (placeholder until this
-  spec's custom routing lands).
-- LEFT ALIGNMENT: NOT done — this ADR is the plan for it.
+_(The original spec continued with implementation pointers and a "current spike
+state" for a fresh session. Those were removed once this ADR was superseded —
+they described a post-process that was never built and would only mislead a
+future reader. The Context and Decision above are retained as the record of the
+path not taken.)_

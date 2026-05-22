@@ -11,17 +11,23 @@ no-build-step React SVG explorer under `frontend/`.
   Sugiyama layout terms, Token/Theme/Palette, side-panel content terms). Use
   these words exactly; they were chosen to retire overloaded ones (e.g.
   "container" is retired).
+- **[`ROADMAP.md`](./ROADMAP.md)** — the running list of intended/next work.
+  ADRs record decisions *already made*; the roadmap is where *upcoming* work
+  lives. Check it for "what's next" — not the ADRs.
 - **[`docs/adr/`](./docs/adr/)** — architectural decisions and their rationale:
-  - `0001` — ELK for in-Region layout (direction; spike in progress).
+  - `0001` — ELK for in-Region layout (accepted; ELK is the layout engine).
   - `0002` — CSS-first single source of truth for design tokens.
   - `0003` — side panel is an interpretation aid, not a reference.
   - `0004` — public hosting on a Hugging Face Docker Space.
-  - `0005` — Region coordinate + routing post-process (the left-align spec;
-    **next thing to implement** — read this before touching `expand-elk.jsx`).
+  - `0005` — left-align coordinate/routing post-process (SUPERSEDED by 0006 —
+    record of a path not taken; do not build against it).
+  - `0006` — ELK owns node placement and in-Region edge routing (no post-process).
+  - `0007` — edge rendering: ELK spline routing with flattened port tails.
 
 These were produced via the `grill-with-docs` convention: when a decision or a
-term crystallises, update `CONTEXT.md` (glossary only) or add an ADR — don't let
-docs drift from code.
+term crystallises, update `CONTEXT.md` (glossary only) or add an ADR; when a
+*work item* surfaces, add it to `ROADMAP.md`. Don't let docs drift from code,
+and don't use ADRs as a to-do list.
 
 ## Notes
 

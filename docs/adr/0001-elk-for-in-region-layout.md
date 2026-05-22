@@ -1,9 +1,10 @@
-# Adopt ELK for in-Region layout (direction, not yet implemented)
+# Adopt ELK for in-Region layout
 
 ---
-Status: proposed — this records the *direction* we intend to move. The current
-codebase is NOT migrated. We will validate ELK against the real requirements
-with an experimental spike first, then migrate under git once proven.
+Status: accepted — ELK is the in-Region layout/routing engine. The spike
+described below was validated and adopted; node placement and routing details
+were subsequently refined in ADR-0006 (ELK owns placement) and ADR-0007 (edge
+render style).
 ---
 
 ## Context
@@ -86,13 +87,12 @@ This boundary is the primary thing the spike must validate.
 - Adds a ~1.4MB script dependency (acceptable for a load-once learning tool).
 - Migration is staged behind git: spike → validate against features 1–4 → adopt.
 
-## Spike status (update)
+## Outcome
 
-The spike lives in `frontend/index-elk.html` + `expand-elk.jsx` + `graph-elk.jsx`
-(legacy `index.html`/`graph.jsx` untouched). ELK handles layering, crossing-min
-ordering, compound nesting (stray/disappearing edges at depth: solved), and the
-FPN-up flip. **One limitation surfaced:** ELK cannot left-edge-align the trunk
-(center-based placement; no native option — confirmed offline + online, elkjs
-issue #217). Resolution: keep ELK for ranks/order/nesting and add a
-coordinate+routing post-process — see **ADR-0005**, which is the next
-implementation step.
+Adopted. ELK lives in `frontend/index-elk.html` + `expand-elk.jsx` +
+`graph-elk.jsx` and handles layering, crossing-min ordering, compound nesting,
+and the FPN-up flip. The left-edge-align limitation that surfaced during the
+spike (ELK center-places the trunk; no native option — elkjs issue #217) was
+explored as a post-process in ADR-0005, then **rejected**: ELK-native center
+placement was deemed fine. ADR-0006 records keeping placement and routing
+inside ELK, and ADR-0007 records the edge render style.
