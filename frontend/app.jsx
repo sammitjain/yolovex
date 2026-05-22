@@ -30,70 +30,19 @@ function isDeferred(active) {
 }
 
 // =============================================================================
-// Learner-facing copy per type (ported from L2)
+// Learner-facing copy per type. Content lives in content/blocks.js
+// (window.YV_CONTENT); this only reads from it. title/blurb feed the panel
+// header, the rest feed BlockContent.
 // =============================================================================
 
-const TYPE_COPY = {
-  Conv2d: {
-    title: 'Conv2d — learnable filter bank',
-    blurb: 'Slides a small kernel across the input and produces one output channel per filter. This is the ONLY layer in the Conv block that carries learnable weights — it does the actual feature extraction. Stride > 1 here also means spatial downsampling.',
-  },
-  BatchNorm2d: {
-    title: 'BatchNorm — channel-wise normalization',
-    blurb: 'Re-centers and re-scales each channel using running mean/variance learned during training. Keeps activations in a stable range so the next nonlinearity sees predictable inputs.',
-  },
-  SiLU: {
-    title: 'SiLU — smooth nonlinearity',
-    blurb: 'Computes x · sigmoid(x). For most positive activations SiLU is nearly x (so this thumbnail will look almost identical to BN output above), but it gently suppresses strong negative values.',
-  },
-  MaxPool2d: {
-    title: 'MaxPool — local maximum',
-    blurb: 'Inside SPPF, a 5×5 stride-1 max pool with padding 2. SPPF chains it three times so the n-th call has covered an effective receptive field of (4n+1)×(4n+1) — a "pyramid of receptive fields" without changing spatial size.',
-  },
-  Concat: {
-    title: 'Concat — stack channels',
-    blurb: 'Joins multiple tensors along the channel dimension. Output channel count = sum of inputs. Used inside C3k2/SPPF to merge parallel branches, and across the neck to fuse skip connections with upsampled features.',
-  },
-  Upsample: {
-    title: 'Upsample — 2× nearest neighbor',
-    blurb: 'Doubles spatial dimensions by repeating each pixel in a 2×2 block. No learnable params. The neck uses this to bring deep coarse features back up to higher-resolution scales for small-object detection.',
-  },
-  Bottleneck: {
-    title: 'Bottleneck — residual mini-block',
-    blurb: 'Two 3×3 convs sandwiching the channel count, with an additive residual skip. Lets each C3k2 add a couple of layers of nonlinear refinement on the parallel branch without inflating param count.',
-  },
-  C3k: {
-    title: 'C3k — small CSP sub-block',
-    blurb: 'A miniature CSP module (split → series of bottlenecks → concat → 1×1) used inside the deeper C3k2 layers.',
-  },
-  PSABlock: {
-    title: 'PSABlock — position-sensitive self-attention',
-    blurb: 'Runs self-attention (Q/K/V) followed by a small feed-forward. Lets the network propagate information across distant locations — useful at the deepest backbone scale where a single token already covers a big receptive field.',
-  },
-  Conv: {
-    title: 'Conv block — Conv2d → BN → SiLU',
-    blurb: 'The basic building block. A learnable Conv2d does feature extraction, BatchNorm normalizes the result, SiLU applies a smooth nonlinearity. Stride-2 versions also halve the spatial size.',
-  },
-  C3k2: {
-    title: 'C3k2 block — CSP feature mixer',
-    blurb: 'Splits the input into two halves, runs a Bottleneck (or nested C3k) on one half, then concats both halves back with the bottleneck output before a 1×1 projection. YOLO26\'s main feature-mixing unit at every backbone resolution.',
-  },
-  SPPF: {
-    title: 'SPPF — spatial pyramid pooling (fast)',
-    blurb: 'Stacks three 5×5 max-pools so a single forward gives features at 4 receptive-field scales, concats them, and projects with a 1×1. Cheap way to give the deepest backbone layer a "view" at multiple object sizes.',
-  },
-  C2PSA: {
-    title: 'C2PSA — CSP + position-sensitive attention',
-    blurb: 'Like C3k2 but with a self-attention block on the parallel branch. Adds long-range context on top of the local convolutional features at the deepest scale.',
-  },
-  Detect: {
-    title: 'Detect head — anchor-free, NMS-free',
-    blurb: 'Runs three parallel conv heads (one per scale) and emits boxes + class scores per anchor cell. Final detections come from a top-K filter on the one-to-one branch (NMS-free).',
-  },
-};
+// Functional ops carry no module class; route them to a content key by their
+// fx `target`. `cat` reuses the real Concat copy; other ops fall through to a
+// same-named scaffold entry in blocks.js (e.g. YV_CONTENT.add).
+const OP_COPY_MAP = { cat: 'Concat' };
 
 function copyFor(typeOrSub) {
-  return TYPE_COPY[typeOrSub] || { title: typeOrSub || 'node', blurb: '' };
+  const c = window.YV_CONTENT && window.YV_CONTENT[typeOrSub];
+  return { title: c?.title || typeOrSub || 'node', blurb: c?.blurb || '' };
 }
 
 // =============================================================================
@@ -719,15 +668,20 @@ function Markdown({ text }) {
   );
 }
 
-// Per-block explainer + forward() source. Reads from window.YV_CONTENT
-// (hand-curated) and window.YV_FORWARD (auto-generated by `yolovex
-// build-content`). Renders nothing if no content exists for the key —
-// e.g. an unknown class or a Detect panel (which has its own copy).
-function BlockContent({ copyKey }) {
+// Per-block explainer. Renders the merged content object resolved in
+// DetailPanel (per-type entry from content/blocks.js + any position override).
+// When no content exists for the key yet, shows a neutral placeholder rather
+// than nothing, so the section is always present (activations render separately).
+function BlockContent({ copyKey, content }) {
   if (!copyKey) return null;
-  const content = window.YV_CONTENT && window.YV_CONTENT[copyKey];
-  const forward = window.YV_FORWARD && window.YV_FORWARD[copyKey];
-  if (!content && !forward) return null;
+  if (!content) {
+    return (
+      <section className="panel-section">
+        <h4 className="section-label">About {copyKey}</h4>
+        <p className="content-tagline">No curated explainer yet for <code>{copyKey}</code>.</p>
+      </section>
+    );
+  }
   return (
     <section className="panel-section">
       <h4 className="section-label">About {copyKey}</h4>
@@ -755,12 +709,6 @@ function BlockContent({ copyKey }) {
           <div className="content-sublabel">YOLO26 novelty</div>
           <Markdown text={content.yolo26} />
         </div>
-      )}
-      {forward && (
-        <details className="content-forward">
-          <summary>{`forward() source — ${copyKey}`}</summary>
-          <pre className="content-code"><code>{forward}</code></pre>
-        </details>
       )}
       {content?.refs && content.refs.length > 0 && (
         <div className="content-refs">
@@ -811,26 +759,48 @@ function DetailPanel({ selected, onClose, panelRef }) {
     );
   }
 
-  // What "type" copy applies — for L1 use block.type; for sub-nodes try to
-  // infer from the fx node's target_class via the spec.
+  // What "type" copy applies. For L1 use block.type. For a sub-node, the
+  // authoritative class is spec.path_classes[pathKey] — correct for collapsed
+  // containers (cv1 → Conv) AND module leaves (cv1/act → SiLU), avoiding the
+  // last-member fxKey pitfall. Functional ops (cat/add/…) aren't in
+  // path_classes; route them by their fx `target` (cat → Concat; others fall
+  // through to a same-named scaffold key).
   let copyKey = block?.type;
   let subTypeLabel = null;
   if (selected.pathKey != null && archBlock) {
     const spec = window.YV_SPEC?.specs?.[archBlock.specId];
-    if (spec && selected.fxKey) {
+    const cls = spec?.path_classes?.[selected.pathKey];
+    if (cls) {
+      copyKey = cls;
+      subTypeLabel = cls;
+    } else if (spec && selected.fxKey) {
       const node = spec.graph.nodes.find(n => n.name === selected.fxKey);
-      if (node?.target_class) {
-        copyKey = node.target_class;
-        subTypeLabel = node.target_class;
-      } else if (selected.subkind === 'container') {
-        const last = selected.pathKey.split('/').pop() || '';
-        const m = last.match(/^(\d+)_(.+)$/);
-        subTypeLabel = m ? m[2] : (spec.path_classes?.[selected.pathKey] || last);
-        copyKey = subTypeLabel;
+      if (node) {
+        // fx targets can be qualified (e.g. `_VariableFunctionsClass.cat`);
+        // take the last segment so `cat`/`add`/`chunk`/`getitem` map cleanly.
+        const op = String(node.target || '').split('.').pop();
+        copyKey = OP_COPY_MAP[op] || node.target_class || op;
+        subTypeLabel = node.target_class || op;
       }
     }
   }
-  const copy = copyFor(copyKey);
+
+  // Position-specific overrides (e.g. C3k2's YOLO26 note only at block 22),
+  // keyed by `idx` for L1 or `idx/pathKey` for a sub-node. Merged over the
+  // per-type entry, override winning per field.
+  const posKey = selected.pathKey == null
+    ? String(selected.idx)
+    : `${selected.idx}/${selected.pathKey}`;
+  const baseContent = (window.YV_CONTENT && window.YV_CONTENT[copyKey]) || null;
+  const override = (window.YV_CONTENT_OVERRIDES && window.YV_CONTENT_OVERRIDES[posKey]) || null;
+  const mergedContent = (baseContent || override)
+    ? { ...baseContent, ...override }
+    : null;
+
+  const copy = {
+    title: mergedContent?.title || copyKey || 'node',
+    blurb: mergedContent?.blurb || '',
+  };
 
   const title = selected.pathKey == null
     ? `[${selected.idx}] ${copy.title}`
@@ -886,7 +856,7 @@ function DetailPanel({ selected, onClose, panelRef }) {
         {/* Per-class explainer is always shown when we have content for the
             key, regardless of whether activations are available — e.g. a
             shape-only op still has class-level context worth reading. */}
-        <BlockContent copyKey={copyKey} />
+        <BlockContent copyKey={copyKey} content={mergedContent} />
 
         {act && (
           <>

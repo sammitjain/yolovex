@@ -166,6 +166,20 @@ The friendly, conceptual answer to "what is this block?" — type-level, plain
 language. The voice to preserve.
 _Avoid_: description (too generic), summary.
 
+**Theory**:
+The rigorous counterpart to Intuition — *this model's* concrete mechanics and
+parameters (kernel/stride, channel splits, residual conditions, where it sits in
+the net). Type-level (the `technical` field). Always written in the model's
+context, never as a free-floating textbook definition.
+_Avoid_: technical (code-field alias only), spec, reference.
+
+**Source link**:
+The per-class deep link to the upstream definition (Ultralytics for the YOLO
+blocks; PyTorch docs for the stdlib leaves). Replaces showing curated `forward()`
+source on the panel — the canvas already visualises the forward wiring, and a
+link stays complete and current.
+_Avoid_: forward (the retired curated-source channel), code box.
+
 **Interpretation**:
 Guidance for reading the *activation* — "what am I looking at, is anything
 notable?" Distinct from Intuition (which explains the block, not the picture).
