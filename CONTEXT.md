@@ -119,6 +119,15 @@ skip-lane / staircase machinery. ELK computes these; internally ELK uses "dummy
 nodes" to do it, but those stay inside the engine — we only consume bend points.
 _Avoid_: dummy node (ELK-internal only), skip lane, waypoint (informal synonym).
 
+**Tail**:
+The short straight segment at each end of a rendered edge, leaving the source
+Port and entering the target Port perpendicular to that side (vertical for the
+top/bottom Ports of the in-Region vertical Flow). For in-Region edges we keep
+ELK's spline routing through the middle and only straighten the two tails (see
+ADR-0007); a Merge's distinct inputs are read off their separate tails.
+_Avoid_: stub, lead-in/lead-out (informal), flat-tail (the bezier style, not the
+segment).
+
 **Compound layout**:
 Laying out a Region's children with the layered algorithm, then sizing the
 Region to fit so it acts as one Node in its parent's layout. The recursion that

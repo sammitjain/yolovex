@@ -40,3 +40,12 @@ docs drift from code.
   bisect by toggling one option/edge at a time. This pinned the
   `considerModelOrder`-on-boundary-crossed-container NPE in minutes after hand-built
   repros failed (see ADR-0006).
+
+- **Inspecting ELK's *output* (edge routing / placement), not just its input:**
+  don't hand-build a graph and guess what ELK returned. Drive the running Space
+  with the Claude preview tools and, in `preview_eval`, wrap
+  `window.YV._elk.layout` to capture the laid-out `root`, then call
+  `window.YV.buildExpansionELK(idx, {expansions:[...]})` and walk the captured
+  tree. This reads the real per-edge sections (start/bend/end points) for any
+  expansion state — how ADR-0007's flattened-tail decisions were verified
+  (e.g. which edges were single-cubic-but-angled vs lane-routed).

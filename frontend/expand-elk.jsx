@@ -42,6 +42,48 @@ function _elkEdgeLabel(lbl, sNode) {
   return null;
 }
 
+// Hybrid spline path for an in-Region (vertical-flow) edge. `pts` is ELK's
+// SPLINES output already in absolute coords. ELK's format is: `start` followed
+// by cubic groups of 3 (control, control, anchor), and any LEFTOVER trailing
+// points are a straight polyline tail into the port (e.g. one cubic that veers
+// over, then a vertical drop into a top port). We KEEP every interior point ELK
+// chose (its node-avoidance routing) and only override the first and last drawn
+// points so the edge leaves the source and enters the target dead-vertical.
+// CRITICAL: emit the trailing remainder as `L` segments — dropping them leaves
+// the path short of the endpoint (edge dangles).
+const ELK_TAIL_EXIT = 20;    // flatten the segment LEAVING the source port
+const ELK_TAIL_ENTRY = 70;  // flatten the segment ENTERING the target port
+function _elkFlatTailSpline(pts) {
+  const n = pts.length;
+  const s = pts[0], t = pts[n - 1];
+  if (n < 4) return `M ${s.x} ${s.y} L ${t.x} ${t.y}`;
+  const dir = Math.sign(t.y - s.y) || 1;
+  let exit = ELK_TAIL_EXIT, entry = ELK_TAIL_ENTRY;
+  const span = Math.abs(t.y - s.y);
+  if (exit + entry > span) { const k = span / (exit + entry); exit *= k; entry *= k; }
+  // When to flatten a tail to vertical:
+  //  - A single cubic (n === 4) has NO interior routing points, so overriding
+  //    either control just yields a clean S between source and target — always
+  //    safe, even when the target is a wide Merge whose port is far off-axis
+  //    (e.g. cv2 → add): ELK draws that as one angled cubic, and we want it
+  //    straightened.
+  //  - For longer edges ELK has interior bend points, usually a side lane it
+  //    routed into to avoid nodes. Only flatten the tail there if ELK's own
+  //    tangent is already near-vertical; otherwise forcing it vertical fights
+  //    the lane and bulges the curve concavely, so leave ELK's control alone.
+  const single = (n === 4);
+  const nearVert = (c, p) => Math.abs(c.x - p.x) <= Math.abs(c.y - p.y);
+  if (single || nearVert(pts[1], s))     pts[1]     = { x: s.x, y: s.y + dir * exit };   // vertical tail out of source
+  if (single || nearVert(pts[n - 2], t)) pts[n - 2] = { x: t.x, y: t.y - dir * entry };  // vertical tail into target
+  let d = `M ${s.x} ${s.y}`;
+  let i = 1;
+  for (; i + 2 < n; i += 3) {
+    d += ` C ${pts[i].x} ${pts[i].y} ${pts[i + 1].x} ${pts[i + 1].y} ${pts[i + 2].x} ${pts[i + 2].y}`;
+  }
+  for (; i < n; i++) d += ` L ${pts[i].x} ${pts[i].y}`;   // straight remainder → endpoint
+  return d;
+}
+
 async function buildExpansionELK(idx, opts) {
   const spec = window.YV_SPEC;
   if (!spec || !_elk) return null;
@@ -99,7 +141,12 @@ async function buildExpansionELK(idx, opts) {
   // `elk.hierarchyHandling` — are set separately below.)
   const ELK_LAYOUT_OPTS = {
     'elk.direction': flip ? 'UP' : 'DOWN',
-    'elk.edgeRouting': 'ORTHOGONAL',
+    // SPLINES gives a per-edge control polygon that routes AROUND nodes to
+    // minimise crossings. walk() keeps every interior point ELK chose and only
+    // reshapes the two port-adjacent control points so the edge leaves the
+    // source and enters the target dead-vertical (see _elkFlatTailSpline) —
+    // soft, ELK-routed curves with straight tails.
+    'elk.edgeRouting': 'SPLINES',
     // Brandes-Köpf node placement. `fixedAlignment` picks the alignment corner
     // and controls which way a branching chain LEANS as it descends. Cycle
     // these to flip the maxpool/branch drift left↔right:
@@ -112,7 +159,7 @@ async function buildExpansionELK(idx, opts) {
     // to minimise crossings. ELK re-routes edges automatically to match.
     // Set to 'NONE' to revert to pure crossing-minimised order.
     'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
-    'elk.layered.spacing.nodeNodeBetweenLayers': '50',   // vertical gap between Layers
+    'elk.layered.spacing.nodeNodeBetweenLayers': '60',   // vertical gap between Layers
     'elk.spacing.nodeNode': '40',                         // horizontal gap, same-Layer nodes
     // Minimum gap between adjacent ports on a node side. Raising this spreads
     // multiple Merge inputs further apart across the node's edge (ELK widens the
@@ -250,8 +297,9 @@ async function buildExpansionELK(idx, opts) {
     for (const e of (node.edges || [])) {
       const sec = e.sections && e.sections[0];
       if (!sec) continue;
-      const pts = [sec.startPoint, ...(sec.bendPoints || []), sec.endPoint];
-      const d = 'M ' + pts.map(pt => `${pt.x + x} ${pt.y + y}`).join(' L ');
+      const raw = [sec.startPoint, ...(sec.bendPoints || []), sec.endPoint];
+      const pts = raw.map(pt => ({ x: pt.x + x, y: pt.y + y }));
+      const d = _elkFlatTailSpline(pts);
       let label = null, labelPos = null;
       if (e.labels && e.labels[0] && e.labels[0].text) {
         label = e.labels[0].text;

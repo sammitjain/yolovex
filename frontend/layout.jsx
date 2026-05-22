@@ -20,8 +20,8 @@ const LAYOUT_SETTINGS_DEFAULTS = {
   DETECT_GAP:     100,  // vertical gap between the P3 / P4 / P5 detect boxes
   H_ENTRY:        30,   // horizontal flat-tail out of the source
   H_EXIT:         36,   // horizontal flat-tail into the target
-  V_ENTRY:        8,    // vertical flat-tail out of the source
-  V_EXIT:         14,   // vertical flat-tail into the target
+  V_ENTRY:        14,    // vertical flat-tail out of the source
+  V_EXIT:         8,   // vertical flat-tail into the target
   NODE_W:         158,
   NODE_H:         56,
   COL_TOP:        80,
@@ -276,7 +276,20 @@ function sourcePorts(meta, a, side) {
 // connection lands on EVERY first layer that consumes it.
 function targetPorts(meta, b, side) {
   if (b.expanded && b.region.entryNodes && b.region.entryNodes.length) {
-    return b.region.entryNodes.map(en => portOnSub(b, en, side));
+    // An entry node that ALSO receives an internal edge is a Merge of the
+    // external block input + an in-Region input (e.g. SPPF's residual `add`,
+    // fed by both `x` and `cv2_act`). Route the external input to its LEFT port
+    // so its two inputs read as distinct instead of stacking on the same side.
+    const subEdges = b.region.subEdges || [];
+    const hasInternalInput = id => subEdges.some(e => e.dst === id);
+    return b.region.entryNodes.map(en => {
+      const enSide = hasInternalInput(en.id) ? 'left' : side;
+      const p = portOnSub(b, en, enSide);
+      // A side (left/right) port wants a HORIZONTAL approach, so the edge feeds
+      // into the node's face rather than dropping vertically onto it (a circular
+      // `add` reads badly with a vertical line hitting its left edge).
+      return { ...p, horiz: enSide === 'left' || enSide === 'right' };
+    });
   }
   if (side === 'left')   return [leftPort(b)];
   if (side === 'top')    return [topPort(b)];
@@ -303,7 +316,11 @@ function edgePaths(meta, nodes, arch) {
     const srcs = sourcePorts(meta, a, down ? 'bottom' : 'top');
     const dsts = targetPorts(meta, b, down ? 'top' : 'bottom');
     const out = [];
-    for (const p1 of srcs) for (const p2 of dsts) out.push(flatBezierVertical(p1, p2, V_ENTRY, V_EXIT));
+    for (const p1 of srcs) for (const p2 of dsts) {
+      out.push(p2.horiz
+        ? flatBezierVtoH(p1, p2, V_ENTRY, H_EXIT)
+        : flatBezierVertical(p1, p2, V_ENTRY, V_EXIT));
+    }
     return out;
   }
   // cross + skip
@@ -357,6 +374,17 @@ function flatBezierVertical(p1, p2, entry, exit) {
   const q2y = p2.y - dir * x;
   const midY = (q1y + q2y) / 2;
   return `M ${p1.x} ${p1.y} L ${p1.x} ${q1y} C ${p1.x} ${midY} ${p2.x} ${midY} ${p2.x} ${q2y} L ${p2.x} ${p2.y}`;
+}
+
+// Vertical-out, horizontal-in flat-tail bezier: exit the source port straight
+// (vertical), then curve once and enter the target port straight (horizontal,
+// from its left). Used when a same-column edge lands on a node's LEFT port
+// (e.g. SPPF's residual `add`) so the two inputs of a Merge read as distinct.
+function flatBezierVtoH(p1, p2, vEntry, hExit) {
+  const dirY = p2.y >= p1.y ? 1 : -1;
+  const q1y = p1.y + dirY * vEntry;
+  const q2x = p2.x - hExit;
+  return `M ${p1.x} ${p1.y} L ${p1.x} ${q1y} C ${p1.x} ${p2.y} ${p1.x} ${p2.y} ${q2x} ${p2.y} L ${p2.x} ${p2.y}`;
 }
 
 // --- Rounded orthogonal polygon --------------------------------------------
