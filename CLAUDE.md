@@ -30,3 +30,13 @@ docs drift from code.
   requirement is free static-hostable output, not "never use tooling" (see 0001).
 - Prefer the live preview over screenshots when verifying UI; let the user drive
   feedback unless they invite screenshot reading.
+- **Debugging an ELK layout failure** (`buildExpansionELK` catches and returns
+  `null`, so the block silently collapses): don't reconstruct the graph by hand
+  and guess — it's bigger/subtler than you think. Capture the *real* ELK input:
+  temporarily `window.__elkFail = JSON.stringify(root)` right before
+  `_elk.layout(root)`, have the user trigger the failing expand and `copy(window.__elkFail)`,
+  then replay that exact JSON headlessly with `node` against
+  `frontend/vendor/elk.bundled.js` (it's a UMD bundle — `require()` works) and
+  bisect by toggling one option/edge at a time. This pinned the
+  `considerModelOrder`-on-boundary-crossed-container NPE in minutes after hand-built
+  repros failed (see ADR-0006).

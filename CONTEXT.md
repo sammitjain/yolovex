@@ -81,14 +81,36 @@ A Node's position within its Layer, chosen to minimise edge crossings.
 _Avoid_: column index, slot.
 
 **Port**:
-The point on a Node's edge where a connection attaches (top / bottom / left /
-right). Already `leftPort` / `rightPort` / `topPort` / `botPort`.
+A point on a Node's side (top / bottom / left / right) where an edge attaches. A
+side may carry **several** Ports — at the L1/Block level there is one mid-side
+Port per side (`leftPort` / `rightPort` / `topPort` / `botPort`), but inside a
+Region a single side hosts one Port per attaching edge.
 _Avoid_: anchor, connector.
+
+**Port fraction**:
+A Port's position along its side, as a fraction of the side length (0 = start,
+1 = end; e.g. two ports on a top edge at 1/3 and 2/3). ELK distributes Ports at
+even fractions by default; overriding them spreads the edges wider.
+_Avoid_: port offset, port ratio (ELK's internal name), slot.
 
 **Long edge**:
 An edge spanning ≥2 Layers. Subsumes what used to be "skip" *and* "staircase
 tap" — both are just long edges, routed identically.
 _Avoid_: skip, skip lane, tap (when meaning the edge).
+
+**Merge**:
+A Node with in-degree ≥ 2 — two or more edges arrive at it (e.g. SPPF's `cat`,
+the residual `add`). A graph-shape descriptor, not a layout strategy. Drives the
+fan-in width boost (widen the Node so its inputs spread across one edge).
+_Avoid_: fan-in (retired strategy term), join, sink.
+
+**Split**:
+A Node with out-degree ≥ 2 — two or more edges leave it. A graph-shape
+descriptor. Drives the fan-out width boost. Distinct from the **split op** (the
+`.split()` / `.chunk()` operation, e.g. in C2PSA): a split op is *a* Split, but
+not every Split is a split op.
+_Avoid_: fan-out (retired strategy term), branch point; and don't conflate the
+shape (Split) with the operation (split op).
 
 **Bend point**:
 A waypoint on a routed edge where it changes direction (what the renderer draws
@@ -158,6 +180,7 @@ _Avoid_: channel stack (that is one component of it).
   it for Role frames.
 - **The five layout strategies are retired.** `spine` → the Flow column;
   `staircase`/`tap`/`STAIR_FRAC` and `skip`/`skipLane` → **Long edge** + **Dummy
-  node**; `fan-in`/`fan-out` → just Nodes with in/out-degree > 1, no special
-  case. They were reactive aesthetic additions; the Sugiyama model absorbs all
-  of them.
+  node**; `fan-in`/`fan-out` as *layout strategies* are retired — the Sugiyama
+  model absorbs them. The in/out-degree ≥ 2 node *shapes* are now named **Merge**
+  and **Split** (see Layout model); they carry only a width-boost *sizing* rule
+  fed to ELK, not a bespoke placement strategy.

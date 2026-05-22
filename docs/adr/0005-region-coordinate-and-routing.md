@@ -1,10 +1,14 @@
 # Region coordinate assignment + edge routing (post-process on ELK)
 
 ---
-Status: proposed — agreed strategy; to be IMPLEMENTED IN A FRESH SESSION against
-this spec. ELK integration (layering/ordering/nesting) already works in
-`frontend/expand-elk.jsx`; only the coordinate + routing pass below is pending.
+Status: SUPERSEDED by ADR-0006. NOT IMPLEMENTED — do not build against this.
 ---
+
+> **Read ADR-0006 instead.** This ADR proposed owning the final X-coordinate
+> assignment (left-pin) and edge routing as a post-process on ELK. We tried it,
+> decided ELK's native center placement is aesthetically fine, and abandoned the
+> whole post-process. The spec below is kept only as a record of the path not
+> taken — nothing here reflects current code or intent.
 
 ## Context
 

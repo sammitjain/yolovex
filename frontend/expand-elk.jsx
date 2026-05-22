@@ -90,23 +90,45 @@ async function buildExpansionELK(idx, opts) {
   const byId = new Map(internalNodes.map(n => [n.id, n]));
 
   // ── Build the ELK hierarchy (compound layout replaces the inset hack) ─────
+  // Shared layout knobs. CRITICAL: under `hierarchyHandling: INCLUDE_CHILDREN`,
+  // ELK does NOT inherit these into child containers — a nested Region falls back
+  // to ELK defaults unless we set them on it too. So this single object is spread
+  // into the root AND every container (see ensureContainer), giving identical
+  // layout at every nesting depth. Tune spacing/placement/order HERE, once.
+  // (Per-node bits — `elk.padding`, and the graph-global `elk.algorithm` /
+  // `elk.hierarchyHandling` — are set separately below.)
+  const ELK_LAYOUT_OPTS = {
+    'elk.direction': flip ? 'UP' : 'DOWN',
+    'elk.edgeRouting': 'ORTHOGONAL',
+    // Brandes-Köpf node placement. `fixedAlignment` picks the alignment corner
+    // and controls which way a branching chain LEANS as it descends. Cycle
+    // these to flip the maxpool/branch drift left↔right:
+    //   LEFTDOWN | RIGHTDOWN | LEFTUP | RIGHTUP | BALANCED
+    'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
+    'elk.layered.nodePlacement.bk.fixedAlignment': 'LEFTUP',
+    // Respect input (fx execution) order when choosing in-layer left/right, so
+    // a Split's first-declared branch (the processing chain — e.g. SPPF's
+    // maxpools, C3k2's C3k) sits on the LEFT instead of ELK freely swapping it
+    // to minimise crossings. ELK re-routes edges automatically to match.
+    // Set to 'NONE' to revert to pure crossing-minimised order.
+    'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES',
+    'elk.layered.spacing.nodeNodeBetweenLayers': '50',   // vertical gap between Layers
+    'elk.spacing.nodeNode': '40',                         // horizontal gap, same-Layer nodes
+    // Minimum gap between adjacent ports on a node side. Raising this spreads
+    // multiple Merge inputs further apart across the node's edge (ELK widens the
+    // node if needed). Default is ~10 — bump to taste.
+    'elk.spacing.portPort': '10',
+    'elk.spacing.edgeNode': '18',
+    'elk.spacing.edgeEdge': '12',
+    'elk.layered.spacing.edgeNodeBetweenLayers': '18',
+  };
+
   const root = {
     id: 'root', _path: [], children: [], edges: [],
     layoutOptions: {
       'elk.algorithm': 'layered',
-      'elk.direction': flip ? 'UP' : 'DOWN',
       'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
-      'elk.edgeRouting': 'ORTHOGONAL',
-      // Left-align the spine (branches extend rightward) instead of centering —
-      // Brandes-Köpf fixed alignment. RIGHTDOWN is the corner that puts the
-      // spine on the LEFT in our DOWN orientation (LEFTUP mirrored it).
-      'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-      'elk.layered.nodePlacement.bk.fixedAlignment': 'RIGHTDOWN',
-      'elk.layered.spacing.nodeNodeBetweenLayers': '44',
-      'elk.spacing.nodeNode': '40',
-      'elk.spacing.edgeNode': '18',
-      'elk.spacing.edgeEdge': '12',
-      'elk.layered.spacing.edgeNodeBetweenLayers': '18',
+      ...ELK_LAYOUT_OPTS,
       'elk.padding': `[top=${gs.REGION_PAD_TOP},left=${gs.REGION_PAD_X},bottom=${gs.REGION_PAD_BOTTOM},right=${gs.REGION_PAD_X}]`,
     },
   };
@@ -119,7 +141,7 @@ async function buildExpansionELK(idx, opts) {
     const node = {
       id: 'C::' + key, _path: path.slice(), children: [], edges: [],
       layoutOptions: {
-        'elk.direction': flip ? 'UP' : 'DOWN',
+        ...ELK_LAYOUT_OPTS,
         'elk.padding': `[top=${ELK_INNER_PAD_TOP},left=${ELK_INNER_PAD_X},bottom=${ELK_INNER_PAD_BOTTOM},right=${ELK_INNER_PAD_X}]`,
       },
     };
@@ -128,22 +150,30 @@ async function buildExpansionELK(idx, opts) {
     return node;
   };
 
-  // In-degree, to widen merge-style nodes (#3) so multiple incoming edges enter
-  // across a wider top edge — fewer overlapping verticals, neater offsets. Same
-  // idea as the legacy staircase span, but ELK does the edge spreading.
+  // Widen branching nodes so their multiple edges spread across a wider top /
+  // bottom edge — fewer overlapping verticals, neater offsets, and ELK does the
+  // edge spreading. Two independent knobs (tune these to adjust branch spacing):
   const FIXED_SUBKINDS = new Set(['arith', 'shape', 'attr', 'struct']);
-  const WIDEN_STEP = 64;
-  // Widen ONLY merge nodes (in-degree ≥ 2) so multiple inputs spread across the
-  // top edge. Fan-out widening is intentionally NOT done — it made the maxpool
-  // chain visually uneven; revisit later.
-  const indeg = new Map();
-  for (const [, t] of internalEdges) indeg.set(t, (indeg.get(t) || 0) + 1);
+  const WIDEN_STEP_IN = 135;    // fan-IN: per extra input on a merge (in-degree ≥ 2)
+  const WIDEN_STEP_OUT = 30;   // fan-OUT: per extra output on a split (out-degree ≥ 2)
+  const indeg = new Map(), outdeg = new Map();
+  for (const [s, t] of internalEdges) {
+    indeg.set(t, (indeg.get(t) || 0) + 1);
+    outdeg.set(s, (outdeg.get(s) || 0) + 1);
+  }
 
   for (const n of internalNodes) {
     const sz = gs.nodeSize(n, null);
     let w = sz.w;
-    const din = indeg.get(n.id) || 0;
-    if (din >= 2 && !FIXED_SUBKINDS.has(n.subkind)) w = sz.w + (din - 1) * WIDEN_STEP;
+    if (!FIXED_SUBKINDS.has(n.subkind)) {
+      const din = indeg.get(n.id) || 0;
+      const dout = outdeg.get(n.id) || 0;
+      const boost = Math.max(
+        din >= 2 ? (din - 1) * WIDEN_STEP_IN : 0,
+        dout >= 2 ? (dout - 1) * WIDEN_STEP_OUT : 0,
+      );
+      w = sz.w + boost;
+    }
     ensureContainer(n.containerPath || []).children.push({ id: n.id, width: w, height: sz.h });
   }
 
@@ -168,6 +198,31 @@ async function buildExpansionELK(idx, opts) {
     const text = _elkEdgeLabel(lbl, sNode);
     if (text) edge.labels = [{ text, width: Math.max(10, text.length * 6 + 4), height: 12 }];
     (container.edges = container.edges || []).push(edge);
+  }
+
+  // elkjs NPEs ("Cannot read properties of undefined (reading 'a')") when
+  // `considerModelOrder` is set on a CONTAINER whose boundary a cross-hierarchy
+  // edge crosses — i.e. an edge (declared at an ancestor LCA) with an endpoint
+  // inside the container. That boundary dummy/port breaks model-order indexing
+  // for ANY strategy value. Such containers are common (every expanded sub-block
+  // connects to the outside; an edge-less container is just the degenerate case).
+  // Strip MO from every boundary-crossed container; keep it on the root (its
+  // boundary can't be crossed) and on fully-internal containers so their branch
+  // ordering still works. Verified against the real C2PSA+cv1 graph.
+  const MODEL_ORDER_KEY = 'elk.layered.considerModelOrder.strategy';
+  const stripMO = new Set();
+  for (const [s, t] of internalEdges) {
+    const sCP = (byId.get(s) || {}).containerPath || [];
+    const tCP = (byId.get(t) || {}).containerPath || [];
+    const lca = lcaPath(sCP, tCP).length;
+    for (const cp of [sCP, tCP]) {
+      for (let d = lca + 1; d <= cp.length; d++) stripMO.add(cp.slice(0, d).join('/'));
+    }
+  }
+  for (const [key, node] of containerNodes) {
+    if (stripMO.has(key) || !node.edges || node.edges.length === 0) {
+      delete node.layoutOptions[MODEL_ORDER_KEY];
+    }
   }
 
   // ── Run ELK ───────────────────────────────────────────────────────────────
