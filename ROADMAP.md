@@ -36,36 +36,6 @@ when it lands; prune Done periodically into git history.
   **friendlier learner-facing strings** — the play-flow overlay captions and
   side-panel titles read mechanically / code-flavoured today; rewrite for a
   learner (drop fx-node nuance from titles).
-- **NEXT UP — hide scalar arithmetic op nodes.** Some `arith` op nodes are pure
-  *shape arithmetic*, not data flow, but render as empty circles. Observations
-  from block 10 (C2PSA), Attention expanded:
-  - `matmul` / `matmul_1` are **already correct** — two genuine tensor inputs
-    each (q·k = `[transpose, getitem_7] → [1,2,300,300]`; attn·v =
-    `[getitem_8, transpose_1] → [1,2,64,300]`). No change needed.
-  - `mul_1` (`matmul × 0.176` scale) is fine — one tensor input + a scalar
-    *literal* (no spurious edge).
-  - The confusing node is the bare **`mul` = `getitem_4 * getitem_5`** — both
-    operands are `null`-shape scalars (computing `view` dims), `outShape: null`,
-    no captured activation → an empty `arith` circle with no inputs/output.
-  - Fix: **hide scalar op nodes** (call_function/arith whose instance shape is
-    `null`), reusing the tensor-vs-scalar signal already used in the upstream
-    walk (`instanceShapes(idx)[name]` not an array). Likely in `expand.jsx`
-    `preprocessGraph` (alongside the existing `getitem` hide) or
-    `classifySubkind`; confirm it doesn't hide tensor arith (`add`, `mul_1`).
-- **Passthrough non-image-shaped outputs in the play-flow** (extends the shape-op
-  passthrough). Nodes like `matmul`/`softmax` (`[1,2,300,300]`) and the attention
-  strips (`[1,2,32,300]`) aren't reshapes, but their outputs aren't image-space,
-  so a stretched heatmap in the flow misleads — give them the same prior-frame
-  passthrough + friendly caption.
-  - **Detection:** image-space ⟺ the output's last-two-dims aspect ratio is
-    **proportional to the input image** (reference `YV_ACT.meta` image_w/h;
-    equivalently any block's spatial grid — 20×15, 40×30, 80×60 all share it).
-    *Any* resolution that's image-shaped qualifies (upscaling represents image
-    information); non-spatial tensors (square 300×300, 32×300) passthrough. Use a
-    small aspect tolerance for rounding.
-  - Compose with the existing rule: passthrough if `isShapeOp(display)` **or**
-    output not image-proportional. New caption for the value-op case (e.g.
-    "attention scores — not an image").
 - **Make the ELK layout the primary page; archive the old layout.**
   - `serve.py` mounts `frontend/` at `/` with `html=True` → `/` serves
     `index.html`. Switch primary to the ELK page (rename `index-elk.html` →
@@ -112,6 +82,33 @@ when it lands; prune Done periodically into git history.
 
 ## Done (recent)
 
+- **IO strip surfaces the real split slice + scalar arith operands (ADR-0003).**
+  Two attention-block confusions fixed. (1) `subUpstreamSources` (`app.jsx`) now
+  stops the upstream walk at a *captured* `getitem` (a split's per-piece slice)
+  instead of always passing through it — so `matmul_1`'s input reads as the V
+  slice `[1,2,64,300]`, not the pre-split `view` `[1,2,128,300]` (the dims now
+  multiply). Same rule makes a C3k2 `cat` show its three real `16`-ch slices
+  rather than dedup'ing them to the pre-chunk parent — confirmed acceptable.
+  Safe because the IO strip renders no fx node names, only thumbnails/shapes.
+  (2) A binary arith op against a constant (one tensor arg + one numeric literal)
+  now carries the literal through `aggregateWithExpansions` → `expand-elk.jsx` →
+  `graph-elk.jsx`, which renders it under the node (e.g. attention's score
+  scaling shows `× 0.177` = 1/√d_k) so the one-input `×` circle isn't a mystery.
+  Also fixed the arith glyph table (was keyed on `mul`/`add` but labels are
+  `fn:mul`/`fn:add`, so circles showed text not `×`/`+`). Verified live on
+  `index-elk.html`.
+- **Play-flow passthrough for non-image-shaped outputs (ADR-0003).** The overlay
+  now stretches an activation to the image frame only when it's *image-shaped* —
+  its last-two-dims aspect is proportional to the input image (`isImageShaped`
+  in `app.jsx`, referencing `YV_ACT.meta` image_w/h, small tolerance for grid
+  rounding). Captured-but-non-image tensors (attention scores `[1,2,300,300]`,
+  value strips `[1,2,*,300]`) now passthrough the prior frame with a "not an
+  image" caption, composing with the existing shape-op passthrough. Verified
+  live on `index-elk.html` (conv grids stretch; matmul/softmax passthrough).
+  *Scalar arith op nodes* (the bare `mul = getitem_4 * getitem_5`, `outShape:
+  null`) were the sibling concern here — already handled: `preprocessGraph`'s
+  existing `shapes[name] === null` drop removes every null-shape node, so they
+  never reach the canvas as empty circles (confirmed for block 10 / Attention).
 - **Activation view for op nodes (ADR-0003).** Split ops (`.split()`/`.chunk()`)
   → per-output brochures (out 0/1/2 tabs, sourced from the already-captured
   `getitem` children, sizes read off each piece's shape); shape ops →

@@ -251,6 +251,14 @@ function aggregateWithExpansions(graph, shapes, expansions, pathClasses) {
     n.targetClass = (orig && orig.target_class)
       || (pathClasses && pathClasses[n.id])
       || (n.kind === 'mod' ? n.label : null);
+    // A binary arith op against a constant (one tensor arg + one numeric
+    // literal) draws only one edge — the scalar isn't a node. Surface the
+    // literal so the canvas can show it (e.g. attention's score scaling
+    // mul × 0.1768 = 1/√d_k), instead of an unexplained one-input × circle.
+    if (n.subkind === 'arith' && orig && Array.isArray(orig.args)) {
+      const nums = orig.args.filter(a => typeof a === 'number');
+      if (nums.length === 1) n.scalarOperand = nums[0];
+    }
   }
 
   return { nodes: aggNodes, edges: aggEdges };

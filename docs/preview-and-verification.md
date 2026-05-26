@@ -21,6 +21,31 @@ CLAUDE.md); let the user drive subjective feedback.
   then `preview_start` again. (This happens after edits restart/orphan the FastAPI
   process; the preview tracker loses the handle but the port stays bound.)
 
+## Stale `.jsx` after an edit (read this — it will bite you)
+
+The dev server sends **no `cache-control`** for the `.jsx` files, and Babel
+fetches them through the browser HTTP cache. After you edit a source file,
+`location.reload()` (and even `?v=…` on the *page* URL, which only busts the
+HTML, not its sub-resources) will often re-run the **old** compiled code — and
+inconsistently, one file fresh while a sibling is stale. Symptom: your change is
+in the file (`curl localhost:8765/app.jsx | grep …` confirms it) but the live
+page still behaves the old way.
+
+Force the browser to refresh each `.jsx` into cache, then navigate:
+
+```js
+(async () => {
+  const files = ['app.jsx','arch.jsx','layout.jsx','expand.jsx','expand-elk.jsx','graph-elk.jsx','graph.jsx'];
+  for (const f of files) { try { await fetch('/'+f, { cache: 'reload' }); } catch (e) {} }
+  if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }
+  location.href = '/index-elk.html?v=' + Date.now();
+})()
+```
+
+Then **confirm the new code is live** before trusting any result, e.g.
+`someFn.toString().includes('<a string only in your edit>')`. (A `serve.py`
+no-cache header for `.jsx` would retire this dance — not yet done.)
+
 ## Which page
 
 - Primary page is currently **`/index-elk.html`** (the ELK layout). `/` still
@@ -98,8 +123,34 @@ against the real `YV_ACT`/`YV_SPEC` to check logic without driving the canvas:
 - `splitOpOutputs({idx, fxKey, subkind:'split', ...})` — a split's getitem
   outputs with shapes.
 - `subUpstreamSources(idx, [fxName])` — upstream tensor inputs (scalars dropped).
+  Walks back through tensor-less nodes (tuple `chunk`/`split`, uncaptured ops)
+  but **stops at a captured `getitem`**, so a split-branch consumer reports the
+  actual slice, not the pre-split parent.
 - `instanceShapes(idx)` — `{ fxName: [..]|[[..]]|null }`; `null` ⇒ scalar/shape
   node, not a tensor.
+- `isImageShaped(shape, meta)` — true iff the last-two-dims aspect is
+  proportional to `meta` image_w/h (the play-flow uses it to decide stretch vs
+  passthrough). E.g. `[1,128,20,15]` → true, `[1,2,300,300]` → false.
 
-Example — confirm the reshape "2 inputs" bug stays fixed:
-`subUpstreamSources(10, ['reshape'])` should return exactly one source.
+Examples:
+- Reshape "2 inputs" bug stays fixed: `subUpstreamSources(10, ['reshape'])`
+  returns exactly one source.
+- Split-slice dims (attention V·attnᵀ): `subUpstreamSources(10, ['matmul_1'])`
+  → two sources whose shapes are `[1,2,64,300]` and `[1,2,300,300]` (NOT
+  `[1,2,128,300]`); look each up via `YV_ACT.nodes['10'].sub[fxKey].shape`.
+
+## Inspecting ELK output without clicking
+
+`window.YV.buildExpansionELK(idx, { expansions: [...] })` is **async** (ELK
+layouts off-thread) — `await` it; treating the returned Promise as the result
+gives `{}` (its `Object.keys` are empty) and silently wrong conclusions. Pass
+the path-key set you want peeled open (`''` is depth-1), then read the laid-out
+`.subNodes` / `.subEdges` directly — e.g. to confirm a field reaches the
+renderer:
+
+```js
+(async () => {
+  const ex = await window.YV.buildExpansionELK(10, { expansions: ['','0_PSABlock','0_PSABlock/attn'] });
+  return ex.subNodes.filter(n => n.subkind === 'arith').map(n => ({ id: n.id, scalarOperand: n.scalarOperand }));
+})()
+```

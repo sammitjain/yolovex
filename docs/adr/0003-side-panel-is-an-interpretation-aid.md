@@ -64,6 +64,27 @@ Both the brochure preview and the IO-strip tiles size to the tensor's true H×W
 (via `fitBox`), so non-image tensors (a split's `32×300` piece, softmax's
 `300×300`) render at their real aspect instead of being squashed to the image's.
 
+The IO upstream walk also **stops at a captured `getitem`** (a split's per-piece
+slice) rather than passing through it to the pre-split parent. So a consumer of
+one split branch shows that branch's real tensor — attention's `matmul_1` reads
+`V [1,2,64,300] · attnᵀ [1,2,300,300]` (dims that multiply), not the whole
+pre-split `[1,2,128,300]`; a C3k2 `cat` shows its three real `16`-ch slices.
+This is safe because the strip renders no fx node names, only thumbnails and
+shapes — the input reads as "the branch coming off the split," which is what the
+learner sees on the canvas. (Genuine tuple returns like `chunk`/`split` carry no
+tensor of their own, so the walk still passes through *them* to the captured
+slices.) Relatedly, an **arith op against a constant** (one tensor input + a
+numeric literal, e.g. the `× 1/√d_k` score scaling) now surfaces that literal on
+the canvas node, so a one-input `×`/`+` circle isn't an unexplained dead end.
+
+Beyond shape ops, the play-flow **passthrough** also covers any captured tensor
+whose output isn't image-shaped (attention scores `[1,2,300,300]`, value strips
+`[1,2,*,300]`): stretching a non-spatial tensor to the image frame would
+mislead, so it holds the prior frame with a caption. Image-shapedness is the
+last-two-dims aspect being proportional to the input image (`isImageShaped`,
+`app.jsx`); *any* image-proportional resolution qualifies (the 20×15/40×30/80×60
+grids all share it).
+
 **3. Interpretation** (new, not yet built) — *what to look for* in this
 activation and whether anything is notable. Distinct from Intuition (which
 explains the block, not the picture). **Hand-authored**, tightly scoped, and

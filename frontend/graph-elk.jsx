@@ -696,12 +696,25 @@ function SubNode({ sn, blockIdx, playing, accent, onHover, onSelect, onToggleSub
 
   if (sk === 'arith') {
     const cx = sn.x + sn.w / 2, cy = sn.y + sn.h / 2;
+    const opName = sn.label.replace(/^fn:/, '');
+    const glyph = ({ add: '+', mul: '×', sub: '−', truediv: '÷' }[opName] || opName || '·');
+    // A constant operand (e.g. attention's 1/√d_k scale) draws no edge, so the
+    // node would otherwise read as a bare one-input op. Show the literal below.
+    const scalar = sn.scalarOperand != null
+      ? `${glyph} ${Number(sn.scalarOperand.toPrecision(3))}`
+      : null;
     return (
       <g style={{ cursor }} onMouseEnter={onEnter} onMouseLeave={onLeave} onClick={handleClick}>
         <circle cx={cx} cy={cy} r={sn.w / 2} fill="#fef3c7" stroke="#f59e0b" strokeWidth="1.5" />
         <text x={cx} y={cy + 5} fontSize="15" fontWeight="700" fill="#78350f" textAnchor="middle">
-          {({ add: '+', mul: '×', sub: '−', truediv: '÷' }[sn.label] || sn.label.replace(/^fn:/, '') || '·')}
+          {glyph}
         </text>
+        {scalar && (
+          <text x={cx} y={sn.y + sn.h + 11} fontSize="9.5" fontWeight="600" fill="#78350f"
+            textAnchor="middle" fontFamily="ui-monospace, monospace">
+            {scalar}
+          </text>
+        )}
       </g>
     );
   }

@@ -142,8 +142,10 @@ along a dimension (channel-halving in C2f/C3k2/C2PSA, the QKV slice in
 Attention). In fx it returns a *tuple*, so its node carries no single tensor;
 its pieces surface as the (canvas-hidden) `getitem` children. On the side panel
 it gets **per-output brochures** (one per piece, each piece's size read off its
-own shape). A split op is *a* Split (the out-degree ≥ 2 shape), but not every
-Split is a split op.
+own shape). Each piece is captured, so a *downstream* node's IO strip shows the
+specific slice it consumes (e.g. attention's V slice), not the pre-split parent
+— the input reads as "the branch coming off the split." A split op is *a* Split
+(the out-degree ≥ 2 shape), but not every Split is a split op.
 _Avoid_: chunk node, tuple op.
 
 **Shape op**:

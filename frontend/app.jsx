@@ -84,6 +84,23 @@ function shapeOpVerb(fxKey) {
   return 'reshaped';
 }
 
+// Is a tensor laid out in image space? Its last-two-dims (H×W) aspect must be
+// proportional to the input image. Any image-proportional resolution qualifies
+// — the spatial grids 20×15 / 40×30 / 80×60 all share the image aspect, and an
+// upscaled map still represents image content. Non-spatial tensors (attention
+// matrices 300×300, value strips 32×300) are NOT image-shaped: stretching them
+// to the image frame in the play-flow would mislead. A small tolerance absorbs
+// integer-grid rounding.
+function isImageShaped(shape, meta) {
+  if (!Array.isArray(shape) || shape.length < 2) return false;
+  const H = shape[shape.length - 2], W = shape[shape.length - 1];
+  if (!H || !W) return false;
+  const imgW = meta?.image_w, imgH = meta?.image_h;
+  if (!imgW || !imgH) return true; // no reference — assume image-space
+  const ratio = (W / H) / (imgW / imgH);
+  return Math.abs(ratio - 1) < 0.12;
+}
+
 // =============================================================================
 // Learner-facing copy per type. Content lives in content/blocks.js
 // (window.YV_CONTENT); this only reads from it. title/blurb feed the panel
@@ -117,13 +134,12 @@ function l1UpstreamSources(idx) {
 // node names that belong to the selected group. Placeholders / get_attrs get
 // inherited as the L1 block's own input sources.
 //
-// We also walk back through nodes that don't have a renderable activation:
-//   - getitem (tuple/list index, hidden in the visual graph)
-//   - chunk / split (return tuples, no 4-D tensor captured)
-//   - any other fx node not present in YV_ACT.nodes[idx].sub
-// So a cat fed by getitem(chunk(cv1)[0]) + getitem(chunk(cv1)[1]) + bottleneck
-// shows TWO inputs (cv1's output, deduped, + the bottleneck), matching the
-// visual graph rather than the raw 3-element list.
+// We walk back through nodes that carry no tensor of their own (no entry in
+// YV_ACT.nodes[idx].sub) — chunk / split (tuple returns) and any uncaptured
+// op — until we reach a node that DOES have a captured tensor, which we surface
+// as the input. A split's per-piece getitem slices ARE captured, so the walk
+// stops at the specific slice and the strip shows its true dims/thumbnail (the
+// branch the learner sees leaving the split), not the pre-split parent.
 function subUpstreamSources(idx, members) {
   if (!members || !members.length) return [];
   const arch = window.YV.buildArch();
@@ -162,9 +178,15 @@ function subUpstreamSources(idx, members) {
     if (Object.prototype.hasOwnProperty.call(shapes, name) && !Array.isArray(shapes[name])) {
       return [];
     }
-    const last = String(n.target || '').split('.').pop();
-    const hiddenVisually = (n.op === 'call_function' && last === 'getitem');
-    if (hiddenVisually || !captured[name]) {
+    // Walk back only through nodes that have NO tensor of their own — tuple
+    // returns (chunk/split), uncaptured getitem, etc. A getitem that WAS
+    // captured (a split's per-piece slice) carries the real slice tensor, so we
+    // stop there and surface it: the IO strip shows the slice's true dims +
+    // thumbnail (e.g. attention's V slice [1,2,64,300], not the pre-split
+    // [1,2,128,300]). The canvas hides the getitem node, but the strip renders
+    // no node names — only the thumbnail and shape — so nothing fx-internal
+    // leaks; the input reads as "the branch coming off the split".
+    if (!captured[name]) {
       const out = [];
       for (const s of (incomingByDst.get(name) || [])) {
         out.push(...expand(s, visited));
@@ -275,10 +297,13 @@ function FlowOverlay({ active, lastActive }) {
     } else {
       const act = lookupActivation(display);
       const friendly = copyFor(type).title.split(' — ')[0] || type;
-      // Shape ops capture a tensor, but it only relabels axes — showing it
-      // stretched to image aspect would mislead. Force passthrough with a
-      // learner-friendly caption instead (the image story is unchanged here).
-      if (!isShapeOp(display) && act && act.mean) {
+      const imageShaped = act && isImageShaped(act.shape, meta);
+      // A tensor only earns a stretched-to-image render if it both exists and
+      // is laid out in image space. Shape ops merely relabel axes; non-image
+      // tensors (attention scores 300×300, value strips 32×300) aren't spatial.
+      // Stretching either to the image frame would mislead — passthrough the
+      // prior frame with a learner-friendly caption instead.
+      if (!isShapeOp(display) && act && act.mean && imageShaped) {
         src = act.mean;
         stretchedActivation = true;
         if (display.pathKey == null) {
@@ -291,8 +316,8 @@ function FlowOverlay({ active, lastActive }) {
         // Remember this frame for the next no-activation node.
         lastImgRef.current = { src, label, sub };
       } else if (lastImgRef.current.src) {
-        // No 4-D tensor here — keep showing the previous step's activation
-        // rather than snapping back to the raw input image.
+        // No image-space tensor here — keep showing the previous step's
+        // activation rather than snapping back to the raw input image.
         src = lastImgRef.current.src;
         stretchedActivation = true;
         const stepLabel = display.pathKey != null
@@ -301,6 +326,11 @@ function FlowOverlay({ active, lastActive }) {
         if (isShapeOp(display)) {
           label = `[${display.idx}] ${stepLabel} · ${shapeOpVerb(display.fxKey)}`;
           sub = 'layout only — image unchanged';
+        } else if (act && act.mean) {
+          // Captured a real tensor, but it isn't image-shaped (e.g. attention
+          // scores) — name it as not-an-image rather than stretching it.
+          label = `[${display.idx}] ${stepLabel} · not an image`;
+          sub = act.shape ? `${act.shape.join('×')} — showing prior activation` : 'showing prior activation';
         } else {
           label = `[${display.idx}] ${stepLabel} · passthrough`;
           sub = 'no 4-D tensor — showing prior activation';

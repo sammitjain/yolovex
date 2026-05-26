@@ -319,6 +319,7 @@ async function buildExpansionELK(idx, opts) {
       id: n.id, label: n.label, subkind: n.subkind || n.kind,
       targetClass: n.targetClass || null, shape: n.shape, pathKey: n.pathKey,
       expandable: !!n.expandable, members: n.members || [n.id],
+      scalarOperand: n.scalarOperand,
       x: p.x, y: p.y, w: p.w, h: p.h,
     };
   });
