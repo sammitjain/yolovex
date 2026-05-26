@@ -94,10 +94,9 @@ when it lands; prune Done periodically into git history.
     throwaway renderer at `frontend/attention-prototype.html`, fed by
     `scripts/export_attention_json.py` → `frontend/attention-prototype-data.js`.
     It supports query click/drag, head 0 / head 1 / mean, per-query vs global
-    normalization, colormap/alpha controls, playback, and a visible state panel.
-    Run with:
-    `uv run python scripts/export_attention_json.py` then
-    `uv run python -m http.server 8766 --directory frontend`.
+    normalization, colormap/alpha controls, playback, a visible state panel, and
+    image upload through `scripts/serve_attention_prototype.py`. Learner notes
+    live in `docs/attention-visualization.md`.
   - **Prototype finding:** the grid is not always 20×20. It follows the
     letterboxed image aspect; the bundled sample produced 20×15
     (`shape=[2,300,300]`, 296 KB uint8 payload). Production copy/code should say

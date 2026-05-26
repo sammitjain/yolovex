@@ -49,10 +49,10 @@
 
     .stage {
       min-width: 0;
-      padding: 18px;
+      padding: 10px;
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
-      gap: 14px;
+      gap: 8px;
     }
 
     .topbar,
@@ -63,9 +63,9 @@
     }
 
     .topbar {
-      min-height: 62px;
+      min-height: 52px;
       border-radius: 8px;
-      padding: 10px 12px;
+      padding: 8px 10px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -133,13 +133,16 @@
     .canvas-wrap {
       min-height: 0;
       display: grid;
-      place-items: center;
+      place-items: start center;
+      align-content: start;
+      padding-top: 2px;
     }
 
     .canvas-frame {
       --image-ratio: 1;
       --image-aspect: 1 / 1;
-      width: min(100%, calc((100vh - 118px) * var(--image-ratio)));
+      width: min(100%, calc((100vh - 92px) * var(--image-ratio)));
+      max-height: calc(100vh - 92px);
       aspect-ratio: var(--image-aspect);
       position: relative;
       background: var(--ink);
@@ -159,10 +162,10 @@
     .rail {
       border-width: 0 0 0 1px;
       min-height: 100vh;
-      padding: 18px;
+      padding: 14px;
       display: grid;
       grid-template-rows: auto auto auto minmax(0, 1fr);
-      gap: 16px;
+      gap: 12px;
       overflow: auto;
     }
 
@@ -181,6 +184,28 @@
     .field {
       display: grid;
       gap: 8px;
+    }
+
+    .upload-panel {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .upload-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .upload-status {
+      min-height: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
     }
 
     .field label,
@@ -307,6 +332,16 @@
 </head>
 <body>
   <script src="./attention-prototype-data.js"></script>
+  <script>
+    (() => {
+      try {
+        const custom = sessionStorage.getItem("YV_ATTENTION_PROTOTYPE_OVERRIDE");
+        if (custom) window.YV_ATTENTION_PROTOTYPE = JSON.parse(custom);
+      } catch (err) {
+        console.warn("Could not load custom attention prototype payload", err);
+      }
+    })();
+  </script>
   <div id="app"></div>
 
   <script>
@@ -358,6 +393,14 @@
             <div>
               <h1>C2PSA attention map</h1>
               <div class="sub">PROTOTYPE - throwaway page for validating the renderer and data contract.</div>
+            </div>
+            <div class="upload-panel">
+              <div class="upload-actions">
+                <button type="button" class="ghost-button" id="uploadButton">Choose image</button>
+                <button type="button" class="ghost-button" id="sampleButton">Use sample</button>
+                <input id="uploadInput" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" hidden />
+              </div>
+              <div class="upload-status" id="uploadStatus"></div>
             </div>
             <div class="metrics">
               <div class="metric">
@@ -451,6 +494,10 @@
         headButtons: document.getElementById("headButtons"),
         normButtons: document.getElementById("normButtons"),
         playButton: document.getElementById("playButton"),
+        uploadButton: document.getElementById("uploadButton"),
+        uploadInput: document.getElementById("uploadInput"),
+        uploadStatus: document.getElementById("uploadStatus"),
+        sampleButton: document.getElementById("sampleButton"),
         colorMap: document.getElementById("colorMap"),
         alpha: document.getElementById("alpha"),
         alphaValue: document.getElementById("alphaValue"),
@@ -497,6 +544,7 @@
         els.gridFrame.style.setProperty("--grid-aspect", `${gridW} / ${gridH}`);
         els.queryRow.max = String(gridH - 1);
         els.queryCol.max = String(gridW - 1);
+        syncUploadStatus();
 
         const labels = [`<button type="button" data-head="mean">Mean</button>`];
         for (let i = 0; i < heads; i += 1) {
@@ -522,6 +570,21 @@
           state.playing = !state.playing;
           syncPlayback();
           render();
+        });
+
+        els.uploadButton.addEventListener("click", () => {
+          els.uploadInput.click();
+        });
+
+        els.uploadInput.addEventListener("change", () => {
+          const [file] = els.uploadInput.files || [];
+          if (file) uploadImage(file);
+          els.uploadInput.value = "";
+        });
+
+        els.sampleButton.addEventListener("click", () => {
+          sessionStorage.removeItem("YV_ATTENTION_PROTOTYPE_OVERRIDE");
+          window.location.reload();
         });
 
         els.colorMap.addEventListener("change", () => {
@@ -706,6 +769,50 @@
           grid: { rows: gridH, cols: gridW },
           tensorShape: tensor.shape,
         }, null, 2);
+      }
+
+      function syncUploadStatus() {
+        const hasCustom = !!sessionStorage.getItem("YV_ATTENTION_PROTOTYPE_OVERRIDE");
+        els.sampleButton.hidden = !hasCustom;
+        els.uploadStatus.textContent = hasCustom
+          ? `Custom image loaded: ${meta.source_image}`
+          : "Sample image loaded. Use the prototype server to generate maps for another image.";
+      }
+
+      async function uploadImage(file) {
+        els.uploadButton.disabled = true;
+        els.sampleButton.disabled = true;
+        els.uploadStatus.textContent = `Generating attention maps for ${file.name}...`;
+
+        try {
+          const form = new FormData();
+          form.append("file", file);
+          const response = await fetch("/api/attention-prototype/upload", {
+            method: "POST",
+            body: form,
+          });
+
+          if (!response.ok) {
+            let message = `${response.status} ${response.statusText}`;
+            try {
+              const body = await response.json();
+              if (body.detail) message = body.detail;
+            } catch (err) {
+              // Keep the status text fallback.
+            }
+            throw new Error(message);
+          }
+
+          const nextPayload = await response.json();
+          sessionStorage.setItem("YV_ATTENTION_PROTOTYPE_OVERRIDE", JSON.stringify(nextPayload));
+          els.uploadStatus.textContent = "Generated. Reloading visualizer...";
+          window.location.reload();
+        } catch (err) {
+          els.uploadStatus.textContent =
+            `Upload failed: ${err.message}. Run uv run python scripts/serve_attention_prototype.py for uploads.`;
+          els.uploadButton.disabled = false;
+          els.sampleButton.disabled = false;
+        }
       }
 
       function attentionRow(head, queryIndex) {

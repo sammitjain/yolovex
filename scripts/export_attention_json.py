@@ -64,7 +64,13 @@ def _quantize_heads(attn: np.ndarray) -> dict[str, Any]:
     }
 
 
-def build_payload(image: Path, imgsz: int, weights: str, jpeg_quality: int) -> dict[str, Any]:
+def build_payload(
+    image: Path,
+    imgsz: int,
+    weights: str,
+    jpeg_quality: int,
+    source_label: str | None = None,
+) -> dict[str, Any]:
     attn, grid_h, grid_w, image_bgr = capture_attention(image, imgsz, weights)
     attn_np = attn[0].numpy().astype(np.float32)
     heads, queries, keys = attn_np.shape
@@ -79,7 +85,7 @@ def build_payload(image: Path, imgsz: int, weights: str, jpeg_quality: int) -> d
         "version": 1,
         "meta": {
             "kind": "attention-prototype",
-            "source_image": str(image),
+            "source_image": source_label or str(image),
             "weights": weights,
             "imgsz": imgsz,
             "image_w": image_w,
