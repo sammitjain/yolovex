@@ -52,21 +52,5 @@ The static path works because `index.html` references `spec-data.js`,
 `activations.js`, and the `.jsx` siblings with relative paths, so any
 static-file viewer (or just `file://`) renders correctly.
 
-## Attention prototype
-
-`attention-prototype.html` is a throwaway standalone page for the ROADMAP
-attention-visualization item. It loads `attention-prototype-data.js`, a compact
-uint8 export of the C2PSA post-softmax attention tensor plus a matching preview
-image.
-
-Regenerate the payload after changing the capture contract:
-
-```bash
-uv run python scripts/export_attention_json.py
-```
-
-Then open `frontend/attention-prototype.html` directly, or serve the folder:
-
-```bash
-uv run python -m http.server 8766 --directory frontend
-```
+Prototype notes live in `ROADMAP.md`; keep this file focused on the current
+frontend runtime.
