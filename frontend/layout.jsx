@@ -73,7 +73,7 @@ function computeColX() {
 // no expansions this reproduces the exact original positions (ROW_GAP / NODE_H
 // are uniform), but when a block is expanded into a region it consumes
 // `regionH` instead of NODE_H and every later block in the column slides along
-// the flow direction. `expansionMap` is `{ idx: <buildExpansion result> }`.
+// the flow direction. `expansionMap` is `{ idx: <buildExpansionELK result> }`.
 //
 // Width: a region also grows rightward by `regionW - NODE_W`; every column to
 // the right of an expanded column is shifted right by the widest such delta.

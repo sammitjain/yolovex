@@ -1,22 +1,20 @@
 // yolovex — ELK-driven in-Region layout (ADR-0001).
 //
-// Parallel to expand.jsx's buildExpansion(), but the GEOMETRY back-half
-// (autoLayout / subEdgePath / computeInnerContainers / the INNER_PAD inset
-// hack / the bespoke beziers) is replaced by ELK (elkjs, loaded as the global
-// `ELK` from vendor/elk.bundled.js). The graph-SEMANTIC front-half
-// (preprocess / aggregate / classify / sizing) is reused verbatim via
-// window.YV._graphSem.
+// `buildExpansionELK(idx, {flip, expansions})` lays out one Block's internals.
+// The GEOMETRY (node placement / edge routing / nesting framing) is ELK's
+// (elkjs, loaded as the global `ELK` from vendor/elk.bundled.js). The
+// graph-SEMANTIC front-half (preprocess / aggregate / classify / sizing) is
+// reused from window.YV._graphSem (graph-sem.jsx).
 //
-// Returns the SAME contract as buildExpansion so graph-elk.jsx renders it with
-// no change:
+// Returns:
 //   { subNodes, subEdges, innerContainers, entryNodes, exitNodes,
 //     regionW, regionH, flip }
-// ...but ASYNC (ELK's layout() is promise-based). graph-elk.jsx awaits it.
+// ASYNC (ELK's layout() is promise-based). graph-elk.jsx awaits it.
 
 // One ELK instance for the whole page.
 const _elk = (typeof ELK !== 'undefined') ? new ELK() : null;
 
-// Nesting padding for inner containers (mirror expand.jsx's INNER_PAD_*).
+// Nesting padding for inner containers.
 const ELK_INNER_PAD_X = 14;
 const ELK_INNER_PAD_TOP = 30;
 const ELK_INNER_PAD_BOTTOM = 12;
@@ -106,7 +104,7 @@ async function buildExpansionELK(idx, opts) {
     pre, instance.shapes_by_node || {}, expansions, blockSpec.path_classes,
   );
 
-  // I/O + entry/exit + internal (identical logic to legacy buildExpansion).
+  // I/O + entry/exit + internal: placeholder/output split from internal nodes.
   const ioNodes = agg.nodes.filter(n => (n.subkind || n.kind) === 'io');
   const inDeg = new Map(), outDeg = new Map();
   agg.nodes.forEach(n => { inDeg.set(n.id, 0); outDeg.set(n.id, 0); });

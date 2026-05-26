@@ -9,19 +9,28 @@ browser, so no build step). It reads two generated payloads:
   payload (boxes, per-class score maps) for one image. Produced by
   `yolovex build-assets` (or rewritten on each upload by `yolovex serve`).
 
+In-Region layout is computed by **ELK** (`elkjs`); see ADR-0001/0006/0007. ELK
+owns node placement + in-Region edge routing inside one expanded Region at a
+time; `layout.jsx` owns the L1 (cross-Block) placement and edges.
+
 ## Files
 
 | File | Role |
 | --- | --- |
-| `index.html` | Entry point. Loads React/Babel + the two payloads + the five jsx files. |
+| `index.html` | Entry point. Loads React/Babel, the ELK bundle, the two payloads + content, and the jsx files (load order below). |
 | `arch.jsx` | Data model. Joins `YV_SPEC.instances` + `edges` with a small **presentation** config (`PRESENTATION`: per-block `col`/`vpos`/`role`). Roles: Backbone 0–8, Neck 9–22, Head 23. Type/role palettes for light + dark. |
-| `layout.jsx` | Pixel positions, role-container shapes, edge paths. Columns are flow-order walks so expanded blocks slide neighbours aside. All tunable spacing lives at the top of this file. |
-| `expand.jsx` | In-place expansion. Self-contained graph machinery + `buildExpansion(idx, {flip})` — turns one L1 block into a laid-out internal component sub-graph (recursive via the `opts.expansions` set). |
-| `graph.jsx` | SVG render + pan/zoom/hover. Clicking a block toggles expansion; renders expanded regions and their internal sub-graph. |
+| `layout.jsx` | L1 pixel positions, Role-frame shapes, cross-Block edge paths. Columns are flow-order walks so expanded blocks slide neighbours aside. All tunable spacing lives at the top of this file. |
+| `graph-sem.jsx` | Shared graph **semantics**: the pure transforms (`preprocessGraph`, `aggregateWithExpansions`, `classifySubkind`) exposed as `window.YV._graphSem`, plus node-sizing rules, region padding, and the sub-kind colour palettes. Layout-engine agnostic. |
+| `expand-elk.jsx` | In-place expansion via ELK. `buildExpansionELK(idx, {flip, expansions})` (async — ELK lays out off-thread) turns one Block into a laid-out internal sub-graph. Reuses `_graphSem` for the semantic front-half; ELK does the geometry. |
+| `graph-elk.jsx` | SVG render + pan/zoom/hover (`window.YV.Graph`). Clicking a Block toggles expansion; renders expanded Regions, their internal sub-graph, and ELK-routed edges. |
 | `app.jsx` | App shell — header, flow play, Settings drawer, DetailPanel, DetectPanel, the 📷 upload flow (server mode), and the `BuildProgressOverlay`. |
+| `vendor/elk.bundled.js` | ELK layout engine — UMD global `ELK`, loaded before the jsx. |
 | `spec-data.js` | Generated. Architecture spec — committed alongside source. |
 | `activations.js` | Generated. Per-image activations — regenerated on every `build-assets` / upload. |
 | `design-spec.html` | Static design doc; not loaded at runtime. |
+
+jsx load order in `index.html`: `arch.jsx`, `layout.jsx`, `graph-sem.jsx`,
+`expand-elk.jsx`, `graph-elk.jsx`, `app.jsx`.
 
 ## Window namespace
 

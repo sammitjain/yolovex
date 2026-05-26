@@ -1,11 +1,7 @@
-// yolovex — SVG graph (ELK fork, ADR-0001). Identical to graph.jsx except the
-// in-Region expansion is built by the ASYNC ELK path
-// (window.YV.buildExpansionELK from expand-elk.jsx) instead of the synchronous
-// legacy buildExpansion. The expansion contract is the same, so every renderer
-// below is unchanged; only the resolution becomes a promise-driven effect (with
-// a stale-guard, and the previous layout kept until the new one resolves — no
-// flicker). Loaded by index-elk.html (which does NOT load graph.jsx); it sets
-// window.YV.Graph.
+// yolovex — SVG graph (ELK, ADR-0001). In-Region expansion is built by the
+// ASYNC ELK path (window.YV.buildExpansionELK from expand-elk.jsx); the
+// resolution is a promise-driven effect (with a stale-guard, and the previous
+// layout kept until the new one resolves — no flicker). Sets window.YV.Graph.
 
 const { useState, useRef, useEffect, useMemo, useCallback } = React;
 

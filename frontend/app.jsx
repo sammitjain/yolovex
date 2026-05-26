@@ -29,7 +29,7 @@ function isDeferred(active) {
   return !!(active && window.YV_ACT?.meta?.skipped?.includes(active.idx));
 }
 
-// Op-node kinds (subkind is classified in expand.jsx and rides on the payload).
+// Op-node kinds (subkind is classified in graph-sem.jsx and rides on the payload).
 const isSplitOp = (sel) => sel?.subkind === 'split';
 const isShapeOp = (sel) => sel?.subkind === 'shape';
 
@@ -160,7 +160,7 @@ function subUpstreamSources(idx, members) {
   }
 
   // Walk back through nodes the visual graph hides — getitem unconditionally
-  // (preprocessGraph in expand.jsx line 42) plus anything we didn't capture
+  // (preprocessGraph in graph-sem.jsx) plus anything we didn't capture
   // a 4-D activation for (tuple-returning chunk/split, etc.). getitem nodes
   // ARE captured (they're 4-D views), so the captured check alone would let
   // them slip through; the explicit name check matches the visual rule.

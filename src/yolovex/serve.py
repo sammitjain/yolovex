@@ -1,6 +1,7 @@
 """Local web server for the explorer with live image upload.
 
-Serves `frontend/index.html` plus its sibling assets, and exposes a small
+Serves the ELK explorer (`frontend/index.html`) plus its sibling assets,
+and exposes a small
 API for uploading a custom image, watching the build progress over SSE,
 and refreshing the activation payload without a hard reload.
 
@@ -234,8 +235,8 @@ def create_app(weights: str, imgsz: int) -> FastAPI:
     # Uploaded images + the default sample image live here.
     app.mount("/assets", StaticFiles(directory=str(ASSETS_DIR)), name="assets")
 
-    # The whole explorer (index.html, *.jsx, spec-data.js, design-spec.html)
-    # is served from frontend/. `html=True` makes `GET /` serve index.html.
+    # The whole explorer (index.html, *.jsx, spec-data.js, …) is served from
+    # frontend/. `html=True` makes `GET /` serve the ELK index.html.
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
 
     return app

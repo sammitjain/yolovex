@@ -32,15 +32,17 @@ using Babel-in-browser and `window.YV*` globals.
 
 ## Current shape
 
-- The current ELK path is `frontend/index-elk.html`,
-  `frontend/graph-elk.jsx`, `frontend/expand-elk.jsx`, and
-  `frontend/vendor/elk.bundled.js`.
-- The older root page still uses `frontend/index.html` and `frontend/graph.jsx`
-  until the roadmap item "Make the ELK layout the primary page" lands.
-- Shared frontend modules include `frontend/arch.jsx`,
-  `frontend/layout.jsx`, `frontend/expand.jsx`, `frontend/app.jsx`,
-  `frontend/spec-data.js`, `frontend/activations.js`, and
+- The ELK layout is the **primary** page — `/` serves `frontend/index.html`.
+  ELK-specific modules: `frontend/graph-elk.jsx`, `frontend/expand-elk.jsx`,
+  and `frontend/vendor/elk.bundled.js`. (There is no longer a second
+  old-renderer page; `graph.jsx`/`expand.jsx` were removed.)
+- Shared frontend modules: `frontend/arch.jsx`, `frontend/layout.jsx` (L1
+  cross-Block placement + edges), `frontend/graph-sem.jsx` (graph-semantic
+  transforms + sizing + palettes, exposed as `window.YV._graphSem`),
+  `frontend/app.jsx`, `frontend/spec-data.js`, `frontend/activations.js`, and
   `frontend/content/blocks.js`.
+- jsx load order in `index.html`: `arch.jsx`, `layout.jsx`, `graph-sem.jsx`,
+  `expand-elk.jsx`, `graph-elk.jsx`, `app.jsx`.
 - Generated payload globals are `window.YV_SPEC` and `window.YV_ACT`; app code
   attaches helpers and components to `window.YV`.
 
@@ -49,8 +51,8 @@ using Babel-in-browser and `window.YV*` globals.
 - Sync dependencies with `uv sync`.
 - Build bundled activations with `uv run yolovex build-assets`.
 - Run the interactive server with `uv run yolovex serve` and inspect
-  `http://127.0.0.1:8765/index-elk.html` for ELK work.
-- Static inspection also works by opening `frontend/index-elk.html`.
+  `http://127.0.0.1:8765/`.
+- Static inspection also works by opening `frontend/index.html`.
 - For UI changes, prefer live DOM inspection over screenshots. Check the real
   app state, computed styles, and `window.YV` helpers where possible.
 
@@ -59,7 +61,6 @@ using Babel-in-browser and `window.YV*` globals.
 The most immediate roadmap items are:
 
 - Complete the side-panel content audit in `frontend/content/blocks.js`.
-- Make the ELK layout the primary page and archive/remove old-renderer code.
 - Integrate the attention visualization prototype into the main app.
 - Build the Interpretation layer after attention-viz provides enough reading
   context.

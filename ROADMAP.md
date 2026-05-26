@@ -10,18 +10,6 @@ when it lands; prune Done periodically into git history.
 
 ## Next
 
-- **Make the ELK layout the primary page; archive the old layout.**
-  - `serve.py` mounts `frontend/` at `/` with `html=True` → `/` serves
-    `index.html`. Switch primary to the ELK page (rename `index-elk.html` →
-    `index.html` after archiving the current one, or adjust the mount); update
-    `serve.py`'s docstring + `frontend/README.md`.
-  - ELK-only: `graph-elk.jsx`, `expand-elk.jsx`, `vendor/elk.bundled.js`.
-    Old-renderer-only: `graph.jsx` (archive/remove). Shared: `arch.jsx`,
-    `layout.jsx`, `expand.jsx`, `app.jsx`.
-  - Needs a **dead-code audit**: parts of `expand.jsx`/`layout.jsx`/`arch.jsx`
-    used only by the retired `graph.jsx` path (e.g. `detectStaircases` /
-    skip-lane machinery superseded by ADR-0005/0006) can go. Minor refactor; do
-    the removal carefully.
 - **Side-panel content audit (ADR-0003).** Full pass over
   `frontend/content/blocks.js`: confirm copy is present and appropriate for L1
   Blocks, Sub-node module classes, and op nodes. Specific gaps:
@@ -62,6 +50,15 @@ when it lands; prune Done periodically into git history.
 
 ## Done (recent)
 
+- **ELK layout is the primary page; old renderer removed.** `/` now serves the
+  ELK explorer (`index-elk.html` → `index.html`; old `index.html` and
+  `graph.jsx` deleted, history is the archive). `expand.jsx` was split: its
+  shared semantic front-half (`_graphSem`, palettes, sizing) moved to the new
+  `graph-sem.jsx`; the dead geometry back-half (legacy `buildExpansion`,
+  `detectStaircases`, skip-lane/staircase machinery superseded by ADR-0006) went
+  with the file. `layout.jsx`/`arch.jsx` were *not* dead — they're the shared L1
+  cross-Block engine. Docs refreshed (`serve.py`, `frontend/README.md`,
+  `docs/preview-and-verification.md`).
 - **Attention visualization prototype.** Standalone prototype merged on
   `codex/attention-viz-prototype` and into local `main` via d3585f8:
   `scripts/export_attention_json.py`, `scripts/serve_attention_prototype.py`,

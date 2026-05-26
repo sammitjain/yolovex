@@ -89,7 +89,7 @@ const BLOCK_DESC = {
 //
 // Non-module nodes (pure fx ops: cat / split / arith / io / shape / attr) are
 // NOT in here — they're coloured by *subkind* via the op fallback table
-// (INNER_PALETTE, seeded in expand.jsx). getNodeStyle() resolves type first,
+// (INNER_PALETTE, seeded in graph-sem.jsx). getNodeStyle() resolves type first,
 // then falls back to the op table. To recolour a block family, edit one row
 // here; every renderer (collapsed node, expanded region, nesting container,
 // leaf sub-node) pulls from it through getNodeStyle / TYPE_COLORS.
@@ -200,12 +200,12 @@ const ACCENT = liveLS().ACCENT_COLOR;  // kept for the module-bottom export
 // Resolver — the one entry point every renderer should use to colour a node.
 // Resolution order:
 //   1. type-keyed BLOCK_STYLES (TYPE_PALETTE) — outer blocks + leaf modules
-//   2. op fallback (INNER_PALETTE, seeded in expand.jsx) — pure fx ops keyed by
+//   2. op fallback (INNER_PALETTE, seeded in graph-sem.jsx) — pure fx ops keyed by
 //      subkind (cat / split / arith / io / shape / attr / op / mod)
 //   3. neutral default
 // Reads LAYOUT_SETTINGS live, so Settings-drawer edits + theme swaps apply on
 // the next render. `type` is the node class (e.g. 'Conv2d'); `subkind` is the
-// expand.jsx bucket used only when no type entry exists.
+// graph-sem.jsx bucket used only when no type entry exists.
 function getNodeStyle(type, subkind) {
   const LS = liveLS();
   const tp = LS.TYPE_PALETTE || {};

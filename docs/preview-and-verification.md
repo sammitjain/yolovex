@@ -35,10 +35,10 @@ Force the browser to refresh each `.jsx` into cache, then navigate:
 
 ```js
 (async () => {
-  const files = ['app.jsx','arch.jsx','layout.jsx','expand.jsx','expand-elk.jsx','graph-elk.jsx','graph.jsx'];
+  const files = ['app.jsx','arch.jsx','layout.jsx','graph-sem.jsx','expand-elk.jsx','graph-elk.jsx'];
   for (const f of files) { try { await fetch('/'+f, { cache: 'reload' }); } catch (e) {} }
   if (window.caches) { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); }
-  location.href = '/index-elk.html?v=' + Date.now();
+  location.href = '/?v=' + Date.now();
 })()
 ```
 
@@ -48,9 +48,9 @@ no-cache header for `.jsx` would retire this dance — not yet done.)
 
 ## Which page
 
-- Primary page is currently **`/index-elk.html`** (the ELK layout). `/` still
-  serves the old `index.html` until the ELK-as-primary migration lands
-  (see ROADMAP). Navigate in an eval: `location.href = '/index-elk.html'`.
+- The ELK layout is the **primary** page — `/` serves it (`frontend/index.html`).
+  There is no longer a separate old renderer. Navigate in an eval:
+  `location.href = '/'`.
 - Data is bundled: `window.YV_SPEC` (per-block fx graphs + per-instance
   `shapes_by_node`), `window.YV_ACT` (captured activations: `.nodes[idx].output`
   and `.nodes[idx].sub[fxName]`, plus `.meta` with `image_w/image_h`),

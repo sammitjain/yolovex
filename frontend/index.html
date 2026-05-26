@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>yolovex — YOLO26 architecture + activations</title>
+  <title>yolovex (ELK) — YOLO26 architecture + activations</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
@@ -789,10 +789,16 @@
   <!-- Hand-curated per-class explainer text (window.YV_CONTENT) -->
   <script src="content/blocks.js"></script>
 
+  <!-- ELK layout engine (ADR-0001) — UMD global `ELK`, loaded before the jsx -->
+  <script src="vendor/elk.bundled.js"></script>
+
   <script type="text/babel" src="arch.jsx"></script>
   <script type="text/babel" src="layout.jsx"></script>
-  <script type="text/babel" src="expand.jsx"></script>
-  <script type="text/babel" src="graph.jsx"></script>
+  <!-- shared graph-semantic transforms + sizing rules + palettes (window.YV._graphSem) -->
+  <script type="text/babel" src="graph-sem.jsx"></script>
+  <script type="text/babel" src="expand-elk.jsx"></script>
+  <!-- ELK renderer; sets window.YV.Graph -->
+  <script type="text/babel" src="graph-elk.jsx"></script>
   <script type="text/babel" src="app.jsx"></script>
 </body>
 </html>
