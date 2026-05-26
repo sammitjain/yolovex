@@ -59,10 +59,10 @@ using Babel-in-browser and `window.YV*` globals.
 The most immediate roadmap items are:
 
 - Complete the side-panel content audit in `frontend/content/blocks.js`.
-- Hide scalar arithmetic op nodes without hiding tensor arithmetic.
-- Passthrough non-image-shaped outputs in the play-flow.
 - Make the ELK layout the primary page and archive/remove old-renderer code.
-- Prototype and then integrate the attention visualization.
+- Integrate the attention visualization prototype into the main app.
+- Build the Interpretation layer after attention-viz provides enough reading
+  context.
 
 When a roadmap item creates a hard-to-reverse decision, add or update an ADR and
 link the work from `ROADMAP.md`. Keep `CONTEXT.md` for shared vocabulary only.

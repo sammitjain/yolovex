@@ -8,34 +8,8 @@ ADR and link it here.
 Keep entries short. Move an item to **Done** (with the resolving commit/ADR)
 when it lands; prune Done periodically into git history.
 
-## In flight
-
-- **Side-panel content (ADR-0003).** Hand-curated `frontend/content/blocks.js`
-  (tagline / intuition / Theory(`technical`) / yolo26 / shape) merged in
-  `BlockContent` (`app.jsx`); now tracked in git. To do:
-  - **Add a per-class source-link map** — Ultralytics for the YOLO blocks
-    (`block.py` composites, `conv.py` for Conv/DWConv/Concat, `head.py` for
-    Detect), PyTorch docs for stdlib leaves. (`refs` exists on only 2 entries
-    today.)
-  - **Widen `blocks.js` coverage** to every block/sub-node class, consistently.
-  - **Replace op scaffolds with researched copy** — `add`/`split`/`chunk`/
-    `getitem` in `blocks.js` are still placeholder `_Scaffold._` text; author
-    real descriptions. Also add `title`/`blurb` for `DWConv`/`Attention`/
-    `Upsample_torch` (no `TYPE_COPY` ever existed for them, so they fall back to
-    the bare class name in the header).
-  - **Author per-position overrides** as needed in `YV_CONTENT_OVERRIDES`
-    (keyed by `idx` or `idx/pathKey`) — only block 22's C3k2 note exists today.
-
 ## Next
 
-- **Content audit — every block / node / op (ADR-0003).** Full pass over
-  `blocks.js`: confirm each entry's copy is present and *appropriate* for that
-  class (add what's missing, fix what's off), now that routing lands copy on the
-  correct node. Covers L1 blocks, sub-node module classes, and the op scaffolds.
-  Needs a final human review pass (the descriptions are research-grade). Also:
-  **friendlier learner-facing strings** — the play-flow overlay captions and
-  side-panel titles read mechanically / code-flavoured today; rewrite for a
-  learner (drop fx-node nuance from titles).
 - **Make the ELK layout the primary page; archive the old layout.**
   - `serve.py` mounts `frontend/` at `/` with `html=True` → `/` serves
     `index.html`. Switch primary to the ELK page (rename `index-elk.html` →
@@ -48,34 +22,32 @@ when it lands; prune Done periodically into git history.
     used only by the retired `graph.jsx` path (e.g. `detectStaircases` /
     skip-lane machinery superseded by ADR-0005/0006) can go. Minor refactor; do
     the removal carefully.
+- **Side-panel content audit (ADR-0003).** Full pass over
+  `frontend/content/blocks.js`: confirm copy is present and appropriate for L1
+  Blocks, Sub-node module classes, and op nodes. Specific gaps:
+  - Add a per-class source-link map (Ultralytics for YOLO blocks; PyTorch docs
+    for stdlib Leaves). `refs` exists on only 2 entries today.
+  - Widen coverage to every block/sub-node class.
+  - Replace op scaffolds (`add`/`split`/`chunk`/`getitem`) with researched copy.
+  - Add `title`/`blurb` for `DWConv`/`Attention`/`Upsample_torch`.
+  - Rewrite mechanical play-flow captions and panel titles for learners.
+  - Add per-position overrides in `YV_CONTENT_OVERRIDES` where useful.
+- **Attention visualization — production integration.** Promote the validated
+  prototype into the app: C2PSA/Attention view, query patch click/drag, head
+  selector, mean view, colormap/alpha controls, and upload support.
+  - Keep `scripts/viz_attention.py` as the standalone GIF/MP4 generator.
+  - Fold eager attention capture into `build_assets`; `serve` should compute it
+    for uploaded images.
+  - Ship the attn tensor (~300 KB uint8 for the sample) and render client-side
+    over the input image; bundle precomputed JSON for sample images.
+  - Record the ship-tensor + client-render data contract in an ADR before
+    productionizing it.
+  - Use `docs/attention-visualization.md` and the prototype finding that grids
+    follow the letterboxed image aspect (sample: 20×15, not always 20×20).
 - **Interpretation layer (ADR-0003, layer 3 — not built).** Hand-authored,
   image-robust "what to look for in this activation" note. **L1 canvas blocks
   first**, sub-nodes/leaves incrementally (second priority). Per-type keying to
   start. Depends on / fed by the attention-viz work for the attention blocks.
-- **Attention visualization.** Graduate `scripts/viz_attention.py` into an
-  interactive in-frontend attention view: pick/drag a query patch → its
-  post-softmax attention row, reshaped to the attention grid and upsampled over the
-  image (both heads selectable + mean). Design settled:
-  - **Ship the attn tensor** (~313 KB uint8, both heads) and render client-side
-    over the single input image — no baked frames. Capture is **eager**, folded
-    into `build_assets`; `serve` computes it for uploaded images. Bundle
-    precomputed JSON for a few sample images.
-  - **Prototype status:** `codex/attention-viz-prototype` adds a standalone
-    throwaway renderer at `frontend/attention-prototype.html`, fed by
-    `scripts/export_attention_json.py` → `frontend/attention-prototype-data.js`.
-    It supports query click/drag, head 0 / head 1 / mean, per-query vs global
-    normalization, colormap/alpha controls, playback, a visible state panel, and
-    image upload through `scripts/serve_attention_prototype.py`. Learner notes
-    live in `docs/attention-visualization.md`.
-  - **Prototype finding:** the grid is not always 20×20. It follows the
-    letterboxed image aspect; the bundled sample produced 20×15
-    (`shape=[2,300,300]`, 296 KB uint8 payload). Production copy/code should say
-    "attention grid" rather than assuming a square grid.
-  - The GIF/MP4 script stays a standalone asset generator. Feeds the
-    C2PSA / Attention / PSABlock Interpretation notes above.
-  - **Open (defer to ADR after prototype):** the ship-tensor + client-render data
-    contract is a real, hard-to-reverse trade-off; record it once the prototype
-    validates the approach.
 
 ## Later
 
@@ -90,6 +62,14 @@ when it lands; prune Done periodically into git history.
 
 ## Done (recent)
 
+- **Attention visualization prototype.** Standalone prototype merged on
+  `codex/attention-viz-prototype` and into local `main` via d3585f8:
+  `scripts/export_attention_json.py`, `scripts/serve_attention_prototype.py`,
+  `frontend/attention-prototype.html`, sample
+  `frontend/attention-prototype-data.js`, and learner notes in
+  `docs/attention-visualization.md`. Validated query click/drag, heads + mean,
+  per-query/global normalization, colormap/alpha controls, playback, upload, and
+  the aspect-aware attention grid (sample is 20×15).
 - **IO strip surfaces the real split slice + scalar arith operands (ADR-0003).**
   Two attention-block confusions fixed. (1) `subUpstreamSources` (`app.jsx`) now
   stops the upstream walk at a *captured* `getitem` (a split's per-piece slice)
