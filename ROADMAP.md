@@ -54,15 +54,23 @@ when it lands; prune Done periodically into git history.
   start. Depends on / fed by the attention-viz work for the attention blocks.
 - **Attention visualization.** Graduate `scripts/viz_attention.py` into an
   interactive in-frontend attention view: pick/drag a query patch → its
-  post-softmax attention row, reshaped to the 20×20 grid and upsampled over the
+  post-softmax attention row, reshaped to the attention grid and upsampled over the
   image (both heads selectable + mean). Design settled:
   - **Ship the attn tensor** (~313 KB uint8, both heads) and render client-side
     over the single input image — no baked frames. Capture is **eager**, folded
     into `build_assets`; `serve` computes it for uploaded images. Bundle
     precomputed JSON for a few sample images.
-  - **Prototype the look first** in a standalone HTML fed by a JSON dump from the
-    existing `capture_attention()`; iterate on colormap / alpha / interpolation /
-    interaction, then port the renderer into the app.
+  - **Prototype status:** `codex/attention-viz-prototype` adds a standalone
+    throwaway renderer at `frontend/attention-prototype.html`, fed by
+    `scripts/export_attention_json.py` → `frontend/attention-prototype-data.js`.
+    It supports query click/drag, head 0 / head 1 / mean, per-query vs global
+    normalization, colormap/alpha controls, playback, a visible state panel, and
+    image upload through `scripts/serve_attention_prototype.py`. Learner notes
+    live in `docs/attention-visualization.md`.
+  - **Prototype finding:** the grid is not always 20×20. It follows the
+    letterboxed image aspect; the bundled sample produced 20×15
+    (`shape=[2,300,300]`, 296 KB uint8 payload). Production copy/code should say
+    "attention grid" rather than assuming a square grid.
   - The GIF/MP4 script stays a standalone asset generator. Feeds the
     C2PSA / Attention / PSABlock Interpretation notes above.
   - **Open (defer to ADR after prototype):** the ship-tensor + client-render data

@@ -51,3 +51,6 @@ Two paths, both fine:
 The static path works because `index.html` references `spec-data.js`,
 `activations.js`, and the `.jsx` siblings with relative paths, so any
 static-file viewer (or just `file://`) renders correctly.
+
+Prototype notes live in `ROADMAP.md`; keep this file focused on the current
+frontend runtime.

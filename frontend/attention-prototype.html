@@ -1,0 +1,1006 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>yolovex attention prototype</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --page: #101419;
+      --panel: #171d24;
+      --panel-2: #202834;
+      --line: #334155;
+      --line-soft: rgba(148, 163, 184, 0.28);
+      --text: #edf2f7;
+      --muted: #9ca9b8;
+      --cyan: #35c4d6;
+      --amber: #f4bd50;
+      --green: #68d391;
+      --rose: #ee6c8a;
+      --ink: #080b0f;
+      --shadow: 0 18px 60px rgba(0, 0, 0, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--page);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+    }
+
+    .stage {
+      min-width: 0;
+      padding: 10px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 8px;
+    }
+
+    .topbar,
+    .rail {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .topbar {
+      min-height: 52px;
+      border-radius: 8px;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .title {
+      min-width: 160px;
+    }
+
+    .title strong {
+      display: block;
+      font-size: 16px;
+      line-height: 1.2;
+    }
+
+    .title span {
+      display: block;
+      color: var(--muted);
+      margin-top: 2px;
+      font-size: 12px;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .segmented {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 3px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .segmented button,
+    .ghost-button {
+      border: 0;
+      color: var(--muted);
+      background: transparent;
+      min-height: 32px;
+      padding: 0 10px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .segmented button.is-active {
+      background: #263240;
+      color: var(--text);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    }
+
+    .ghost-button {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+    }
+
+    .canvas-wrap {
+      min-height: 0;
+      display: grid;
+      place-items: start center;
+      align-content: start;
+      padding-top: 2px;
+    }
+
+    .canvas-frame {
+      --image-ratio: 1;
+      --image-aspect: 1 / 1;
+      width: min(100%, calc((100vh - 92px) * var(--image-ratio)));
+      max-height: calc(100vh - 92px);
+      aspect-ratio: var(--image-aspect);
+      position: relative;
+      background: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      touch-action: none;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .rail {
+      border-width: 0 0 0 1px;
+      min-height: 100vh;
+      padding: 14px;
+      display: grid;
+      grid-template-rows: auto auto auto minmax(0, 1fr);
+      gap: 12px;
+      overflow: auto;
+    }
+
+    .rail h1 {
+      margin: 0;
+      font-size: 19px;
+      line-height: 1.2;
+    }
+
+    .rail .sub {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .field {
+      display: grid;
+      gap: 8px;
+    }
+
+    .upload-panel {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    .upload-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .upload-status {
+      min-height: 18px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+    }
+
+    .field label,
+    .metric-label {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .slider {
+      display: grid;
+      grid-template-columns: 1fr 48px;
+      align-items: center;
+      gap: 10px;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--cyan);
+    }
+
+    select,
+    input[type="number"] {
+      width: 100%;
+      min-height: 34px;
+      color: var(--text);
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0 9px;
+    }
+
+    .xy {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .metric {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      min-width: 0;
+    }
+
+    .metric strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 18px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .grid-frame {
+      --grid-aspect: 1 / 1;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      aspect-ratio: var(--grid-aspect);
+      touch-action: none;
+    }
+
+    #gridCanvas {
+      cursor: crosshair;
+    }
+
+    .state {
+      min-height: 160px;
+      background: #0e1319;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      overflow: auto;
+      color: #c7d2e0;
+      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      white-space: pre-wrap;
+    }
+
+    .missing {
+      max-width: 620px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .missing code {
+      display: block;
+      margin-top: 12px;
+      padding: 10px;
+      background: var(--ink);
+      border-radius: 6px;
+      overflow: auto;
+      color: var(--green);
+    }
+
+    @media (max-width: 920px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .rail {
+        min-height: auto;
+        border-width: 1px 0 0;
+      }
+
+      .canvas-frame {
+        width: min(100%, calc(82vh * var(--image-ratio)));
+      }
+    }
+  </style>
+</head>
+<body>
+  <script src="./attention-prototype-data.js"></script>
+  <script>
+    (() => {
+      try {
+        const custom = sessionStorage.getItem("YV_ATTENTION_PROTOTYPE_OVERRIDE");
+        if (custom) window.YV_ATTENTION_PROTOTYPE = JSON.parse(custom);
+      } catch (err) {
+        console.warn("Could not load custom attention prototype payload", err);
+      }
+    })();
+  </script>
+  <div id="app"></div>
+
+  <script>
+    (() => {
+      const payload = window.YV_ATTENTION_PROTOTYPE;
+      const app = document.getElementById("app");
+
+      if (!payload) {
+        app.innerHTML = `
+          <div class="shell">
+            <main class="stage">
+              <div class="canvas-wrap">
+                <section class="missing">
+                  <h1>Attention prototype data missing</h1>
+                  <p>Generate the local payload, then reload this page.</p>
+                  <code>uv run python scripts/export_attention_json.py</code>
+                </section>
+              </div>
+            </main>
+          </div>
+        `;
+        return;
+      }
+
+      app.innerHTML = `
+        <div class="shell">
+          <main class="stage">
+            <header class="topbar">
+              <div class="title">
+                <strong>Attention prototype</strong>
+                <span id="metaLine"></span>
+              </div>
+              <div class="control-row">
+                <div class="segmented" id="headButtons"></div>
+                <div class="segmented" id="normButtons">
+                  <button type="button" data-norm="query">Per query</button>
+                  <button type="button" data-norm="global">Global</button>
+                </div>
+                <button type="button" class="ghost-button" id="playButton">Play</button>
+              </div>
+            </header>
+            <div class="canvas-wrap">
+              <div class="canvas-frame" id="canvasFrame">
+                <canvas id="sceneCanvas"></canvas>
+              </div>
+            </div>
+          </main>
+          <aside class="rail">
+            <div>
+              <h1>C2PSA attention map</h1>
+              <div class="sub">PROTOTYPE - throwaway page for validating the renderer and data contract.</div>
+            </div>
+            <div class="upload-panel">
+              <div class="upload-actions">
+                <button type="button" class="ghost-button" id="uploadButton">Choose image</button>
+                <button type="button" class="ghost-button" id="sampleButton">Use sample</button>
+                <input id="uploadInput" type="file" accept="image/png,image/jpeg,image/webp,image/bmp" hidden />
+              </div>
+              <div class="upload-status" id="uploadStatus"></div>
+            </div>
+            <div class="metrics">
+              <div class="metric">
+                <span class="metric-label">Query</span>
+                <strong id="queryMetric"></strong>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Peak key</span>
+                <strong id="peakMetric"></strong>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Peak weight</span>
+                <strong id="weightMetric"></strong>
+              </div>
+              <div class="metric">
+                <span class="metric-label">Entropy</span>
+                <strong id="entropyMetric"></strong>
+              </div>
+            </div>
+            <div class="grid-frame" id="gridFrame">
+              <canvas id="gridCanvas"></canvas>
+            </div>
+            <div class="field">
+              <label for="colorMap">Color map</label>
+              <select id="colorMap">
+                <option value="inferno">Inferno</option>
+                <option value="turbo">Turbo</option>
+                <option value="viridis">Viridis</option>
+                <option value="coolwarm">Cool warm</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="alpha">Overlay</label>
+              <div class="slider">
+                <input id="alpha" type="range" min="0" max="1" step="0.01" value="0.58" />
+                <span id="alphaValue"></span>
+              </div>
+            </div>
+            <div class="field">
+              <label for="speed">Speed</label>
+              <div class="slider">
+                <input id="speed" type="range" min="2" max="18" step="1" value="8" />
+                <span id="speedValue"></span>
+              </div>
+            </div>
+            <div class="xy">
+              <div class="field">
+                <label for="queryRow">Row</label>
+                <input id="queryRow" type="number" min="0" step="1" />
+              </div>
+              <div class="field">
+                <label for="queryCol">Col</label>
+                <input id="queryCol" type="number" min="0" step="1" />
+              </div>
+            </div>
+            <pre class="state" id="stateView"></pre>
+          </aside>
+        </div>
+      `;
+
+      const meta = payload.meta;
+      const tensor = payload.attention;
+      const gridW = meta.grid_w;
+      const gridH = meta.grid_h;
+      const tokens = gridW * gridH;
+      const heads = meta.heads;
+      const bytes = decodeBase64(tensor.data);
+      const headRanges = tensor.min.map((min, i) => ({
+        min,
+        max: tensor.max[i],
+        span: Math.max(tensor.max[i] - min, 1e-12),
+      }));
+
+      const state = {
+        head: "mean",
+        norm: "query",
+        colorMap: "inferno",
+        alpha: 0.58,
+        row: Math.floor(gridH / 2),
+        col: Math.floor(gridW / 2),
+        playing: false,
+        fps: 8,
+      };
+
+      const els = {
+        metaLine: document.getElementById("metaLine"),
+        canvasFrame: document.getElementById("canvasFrame"),
+        scene: document.getElementById("sceneCanvas"),
+        gridFrame: document.getElementById("gridFrame"),
+        grid: document.getElementById("gridCanvas"),
+        headButtons: document.getElementById("headButtons"),
+        normButtons: document.getElementById("normButtons"),
+        playButton: document.getElementById("playButton"),
+        uploadButton: document.getElementById("uploadButton"),
+        uploadInput: document.getElementById("uploadInput"),
+        uploadStatus: document.getElementById("uploadStatus"),
+        sampleButton: document.getElementById("sampleButton"),
+        colorMap: document.getElementById("colorMap"),
+        alpha: document.getElementById("alpha"),
+        alphaValue: document.getElementById("alphaValue"),
+        speed: document.getElementById("speed"),
+        speedValue: document.getElementById("speedValue"),
+        queryRow: document.getElementById("queryRow"),
+        queryCol: document.getElementById("queryCol"),
+        queryMetric: document.getElementById("queryMetric"),
+        peakMetric: document.getElementById("peakMetric"),
+        weightMetric: document.getElementById("weightMetric"),
+        entropyMetric: document.getElementById("entropyMetric"),
+        stateView: document.getElementById("stateView"),
+      };
+
+      const ctx = els.scene.getContext("2d");
+      const gridCtx = els.grid.getContext("2d");
+      const heat = document.createElement("canvas");
+      heat.width = gridW;
+      heat.height = gridH;
+      const heatCtx = heat.getContext("2d", { willReadFrequently: true });
+      const image = new Image();
+      const globalRanges = new Map();
+      let playTimer = null;
+      let draggingScene = false;
+      let draggingGrid = false;
+      let currentRow = null;
+
+      image.onload = () => {
+        syncCanvasSize();
+        render();
+      };
+      image.src = payload.image.data_url;
+
+      setupControls();
+      window.addEventListener("resize", () => {
+        syncCanvasSize();
+        render();
+      });
+
+      function setupControls() {
+        els.metaLine.textContent = `${gridH}x${gridW} query grid, ${heads} heads, ${meta.imgsz}px input`;
+        els.canvasFrame.style.setProperty("--image-ratio", String(meta.image_w / meta.image_h));
+        els.canvasFrame.style.setProperty("--image-aspect", `${meta.image_w} / ${meta.image_h}`);
+        els.gridFrame.style.setProperty("--grid-aspect", `${gridW} / ${gridH}`);
+        els.queryRow.max = String(gridH - 1);
+        els.queryCol.max = String(gridW - 1);
+        syncUploadStatus();
+
+        const labels = [`<button type="button" data-head="mean">Mean</button>`];
+        for (let i = 0; i < heads; i += 1) {
+          labels.push(`<button type="button" data-head="${i}">Head ${i}</button>`);
+        }
+        els.headButtons.innerHTML = labels.join("");
+
+        els.headButtons.addEventListener("click", (event) => {
+          const button = event.target.closest("[data-head]");
+          if (!button) return;
+          state.head = button.dataset.head;
+          render();
+        });
+
+        els.normButtons.addEventListener("click", (event) => {
+          const button = event.target.closest("[data-norm]");
+          if (!button) return;
+          state.norm = button.dataset.norm;
+          render();
+        });
+
+        els.playButton.addEventListener("click", () => {
+          state.playing = !state.playing;
+          syncPlayback();
+          render();
+        });
+
+        els.uploadButton.addEventListener("click", () => {
+          els.uploadInput.click();
+        });
+
+        els.uploadInput.addEventListener("change", () => {
+          const [file] = els.uploadInput.files || [];
+          if (file) uploadImage(file);
+          els.uploadInput.value = "";
+        });
+
+        els.sampleButton.addEventListener("click", () => {
+          sessionStorage.removeItem("YV_ATTENTION_PROTOTYPE_OVERRIDE");
+          window.location.reload();
+        });
+
+        els.colorMap.addEventListener("change", () => {
+          state.colorMap = els.colorMap.value;
+          render();
+        });
+
+        els.alpha.addEventListener("input", () => {
+          state.alpha = Number(els.alpha.value);
+          render();
+        });
+
+        els.speed.addEventListener("input", () => {
+          state.fps = Number(els.speed.value);
+          syncPlayback();
+          render();
+        });
+
+        els.queryRow.addEventListener("input", () => {
+          setQuery(Number(els.queryRow.value), state.col);
+        });
+
+        els.queryCol.addEventListener("input", () => {
+          setQuery(state.row, Number(els.queryCol.value));
+        });
+
+        els.scene.addEventListener("pointerdown", (event) => {
+          draggingScene = true;
+          els.scene.setPointerCapture(event.pointerId);
+          setQueryFromCanvas(event, els.scene);
+        });
+        els.scene.addEventListener("pointermove", (event) => {
+          if (draggingScene) setQueryFromCanvas(event, els.scene);
+        });
+        els.scene.addEventListener("pointerup", () => {
+          draggingScene = false;
+        });
+        els.scene.addEventListener("pointercancel", () => {
+          draggingScene = false;
+        });
+
+        els.grid.addEventListener("pointerdown", (event) => {
+          draggingGrid = true;
+          els.grid.setPointerCapture(event.pointerId);
+          setQueryFromCanvas(event, els.grid);
+        });
+        els.grid.addEventListener("pointermove", (event) => {
+          if (draggingGrid) setQueryFromCanvas(event, els.grid);
+        });
+        els.grid.addEventListener("pointerup", () => {
+          draggingGrid = false;
+        });
+        els.grid.addEventListener("pointercancel", () => {
+          draggingGrid = false;
+        });
+      }
+
+      function syncCanvasSize() {
+        resizeCanvasToDisplay(els.scene);
+        resizeCanvasToDisplay(els.grid);
+      }
+
+      function render() {
+        if (!image.complete) return;
+        currentRow = attentionRow(state.head, state.row * gridW + state.col);
+        const range = rangeFor(currentRow, state.head, state.norm);
+        const stats = rowStats(currentRow);
+
+        paintScene(currentRow, range, stats);
+        paintGrid();
+        syncControls(stats);
+      }
+
+      function paintScene(row, range, stats) {
+        const w = els.scene.width;
+        const h = els.scene.height;
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(image, 0, 0, w, h);
+        paintHeatmap(row, range);
+        ctx.save();
+        ctx.globalAlpha = state.alpha;
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(heat, 0, 0, w, h);
+        ctx.restore();
+
+        const cellW = w / gridW;
+        const cellH = h / gridH;
+        drawCell(ctx, state.col, state.row, cellW, cellH, varColor("--cyan"), 2.5);
+        drawCell(ctx, stats.peakCol, stats.peakRow, cellW, cellH, varColor("--amber"), 2);
+
+        ctx.save();
+        ctx.strokeStyle = "rgba(255,255,255,0.12)";
+        ctx.lineWidth = 1;
+        for (let x = 0; x <= gridW; x += 1) {
+          const px = Math.round(x * cellW) + 0.5;
+          ctx.beginPath();
+          ctx.moveTo(px, 0);
+          ctx.lineTo(px, h);
+          ctx.stroke();
+        }
+        for (let y = 0; y <= gridH; y += 1) {
+          const py = Math.round(y * cellH) + 0.5;
+          ctx.beginPath();
+          ctx.moveTo(0, py);
+          ctx.lineTo(w, py);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      function paintHeatmap(row, range) {
+        const img = heatCtx.createImageData(gridW, gridH);
+        const colors = COLOR_MAPS[state.colorMap] || COLOR_MAPS.inferno;
+        for (let i = 0; i < row.length; i += 1) {
+          const t = normalize(row[i], range.min, range.max);
+          const c = sampleGradient(colors, t);
+          const j = i * 4;
+          img.data[j] = c[0];
+          img.data[j + 1] = c[1];
+          img.data[j + 2] = c[2];
+          img.data[j + 3] = 255;
+        }
+        heatCtx.putImageData(img, 0, 0);
+      }
+
+      function paintGrid() {
+        const w = els.grid.width;
+        const h = els.grid.height;
+        const cellW = w / gridW;
+        const cellH = h / gridH;
+        const row = currentRow || attentionRow(state.head, state.row * gridW + state.col);
+        const range = rangeFor(row, state.head, state.norm);
+        gridCtx.clearRect(0, 0, w, h);
+        paintHeatmap(row, range);
+        gridCtx.imageSmoothingEnabled = false;
+        gridCtx.drawImage(heat, 0, 0, w, h);
+        gridCtx.strokeStyle = "rgba(255,255,255,0.16)";
+        gridCtx.lineWidth = 1;
+        for (let x = 0; x <= gridW; x += 1) {
+          gridCtx.beginPath();
+          gridCtx.moveTo(Math.round(x * cellW) + 0.5, 0);
+          gridCtx.lineTo(Math.round(x * cellW) + 0.5, h);
+          gridCtx.stroke();
+        }
+        for (let y = 0; y <= gridH; y += 1) {
+          gridCtx.beginPath();
+          gridCtx.moveTo(0, Math.round(y * cellH) + 0.5);
+          gridCtx.lineTo(w, Math.round(y * cellH) + 0.5);
+          gridCtx.stroke();
+        }
+        drawCell(gridCtx, state.col, state.row, cellW, cellH, varColor("--cyan"), 2.5);
+      }
+
+      function syncControls(stats) {
+        els.headButtons.querySelectorAll("button").forEach((button) => {
+          button.classList.toggle("is-active", button.dataset.head === state.head);
+        });
+        els.normButtons.querySelectorAll("button").forEach((button) => {
+          button.classList.toggle("is-active", button.dataset.norm === state.norm);
+        });
+        els.playButton.textContent = state.playing ? "Pause" : "Play";
+        els.colorMap.value = state.colorMap;
+        els.alpha.value = String(state.alpha);
+        els.speed.value = String(state.fps);
+        els.alphaValue.textContent = `${Math.round(state.alpha * 100)}%`;
+        els.speedValue.textContent = `${state.fps} fps`;
+        els.queryRow.value = String(state.row);
+        els.queryCol.value = String(state.col);
+        els.queryMetric.textContent = `${state.row}, ${state.col}`;
+        els.peakMetric.textContent = `${stats.peakRow}, ${stats.peakCol}`;
+        els.weightMetric.textContent = stats.peak.toFixed(5);
+        els.entropyMetric.textContent = stats.entropy.toFixed(2);
+        els.stateView.textContent = JSON.stringify({
+          head: state.head,
+          normalize: state.norm,
+          colorMap: state.colorMap,
+          alpha: Number(state.alpha.toFixed(2)),
+          query: { row: state.row, col: state.col, token: state.row * gridW + state.col },
+          peakKey: { row: stats.peakRow, col: stats.peakCol, token: stats.peakIndex },
+          peakWeight: Number(stats.peak.toFixed(7)),
+          entropy: Number(stats.entropy.toFixed(4)),
+          grid: { rows: gridH, cols: gridW },
+          tensorShape: tensor.shape,
+        }, null, 2);
+      }
+
+      function syncUploadStatus() {
+        const hasCustom = !!sessionStorage.getItem("YV_ATTENTION_PROTOTYPE_OVERRIDE");
+        els.sampleButton.hidden = !hasCustom;
+        els.uploadStatus.textContent = hasCustom
+          ? `Custom image loaded: ${meta.source_image}`
+          : "Sample image loaded. Use the prototype server to generate maps for another image.";
+      }
+
+      async function uploadImage(file) {
+        els.uploadButton.disabled = true;
+        els.sampleButton.disabled = true;
+        els.uploadStatus.textContent = `Generating attention maps for ${file.name}...`;
+
+        try {
+          const form = new FormData();
+          form.append("file", file);
+          const response = await fetch("/api/attention-prototype/upload", {
+            method: "POST",
+            body: form,
+          });
+
+          if (!response.ok) {
+            let message = `${response.status} ${response.statusText}`;
+            try {
+              const body = await response.json();
+              if (body.detail) message = body.detail;
+            } catch (err) {
+              // Keep the status text fallback.
+            }
+            throw new Error(message);
+          }
+
+          const nextPayload = await response.json();
+          sessionStorage.setItem("YV_ATTENTION_PROTOTYPE_OVERRIDE", JSON.stringify(nextPayload));
+          els.uploadStatus.textContent = "Generated. Reloading visualizer...";
+          window.location.reload();
+        } catch (err) {
+          els.uploadStatus.textContent =
+            `Upload failed: ${err.message}. Run uv run python scripts/serve_attention_prototype.py for uploads.`;
+          els.uploadButton.disabled = false;
+          els.sampleButton.disabled = false;
+        }
+      }
+
+      function attentionRow(head, queryIndex) {
+        const out = new Float32Array(tokens);
+        if (head === "mean") {
+          for (let h = 0; h < heads; h += 1) {
+            addHeadRow(out, h, queryIndex, 1 / heads);
+          }
+          return out;
+        }
+        addHeadRow(out, Number(head), queryIndex, 1);
+        return out;
+      }
+
+      function addHeadRow(out, headIndex, queryIndex, scale) {
+        const range = headRanges[headIndex];
+        const base = (headIndex * tokens * tokens) + (queryIndex * tokens);
+        for (let i = 0; i < tokens; i += 1) {
+          out[i] += (range.min + (bytes[base + i] / 255) * range.span) * scale;
+        }
+      }
+
+      function rangeFor(row, head, mode) {
+        if (mode === "query") return localRange(row);
+        const key = `global:${head}`;
+        if (!globalRanges.has(key)) {
+          globalRanges.set(key, computeGlobalRange(head));
+        }
+        return globalRanges.get(key);
+      }
+
+      function localRange(row) {
+        let min = Infinity;
+        let max = -Infinity;
+        for (const value of row) {
+          if (value < min) min = value;
+          if (value > max) max = value;
+        }
+        return { min, max };
+      }
+
+      function computeGlobalRange(head) {
+        if (head !== "mean") {
+          const index = Number(head);
+          return { min: headRanges[index].min, max: headRanges[index].max };
+        }
+        let min = Infinity;
+        let max = -Infinity;
+        const row = new Float32Array(tokens);
+        for (let query = 0; query < tokens; query += 1) {
+          row.fill(0);
+          for (let h = 0; h < heads; h += 1) addHeadRow(row, h, query, 1 / heads);
+          const r = localRange(row);
+          if (r.min < min) min = r.min;
+          if (r.max > max) max = r.max;
+        }
+        return { min, max };
+      }
+
+      function rowStats(row) {
+        let sum = 0;
+        let peak = -Infinity;
+        let peakIndex = 0;
+        for (let i = 0; i < row.length; i += 1) {
+          const value = row[i];
+          sum += value;
+          if (value > peak) {
+            peak = value;
+            peakIndex = i;
+          }
+        }
+
+        let entropy = 0;
+        if (sum > 0) {
+          for (const value of row) {
+            const p = value / sum;
+            if (p > 0) entropy -= p * Math.log2(p);
+          }
+        }
+
+        return {
+          peak,
+          peakIndex,
+          peakRow: Math.floor(peakIndex / gridW),
+          peakCol: peakIndex % gridW,
+          entropy,
+        };
+      }
+
+      function setQuery(row, col) {
+        state.row = clamp(Math.round(row), 0, gridH - 1);
+        state.col = clamp(Math.round(col), 0, gridW - 1);
+        render();
+      }
+
+      function setQueryFromCanvas(event, canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const x = clamp(event.clientX - rect.left, 0, rect.width - 1);
+        const y = clamp(event.clientY - rect.top, 0, rect.height - 1);
+        setQuery(Math.floor((y / rect.height) * gridH), Math.floor((x / rect.width) * gridW));
+      }
+
+      function syncPlayback() {
+        if (playTimer) {
+          clearInterval(playTimer);
+          playTimer = null;
+        }
+        if (!state.playing) return;
+        playTimer = setInterval(() => {
+          let token = state.row * gridW + state.col + 1;
+          if (token >= tokens) token = 0;
+          state.row = Math.floor(token / gridW);
+          state.col = token % gridW;
+          render();
+        }, Math.max(30, 1000 / state.fps));
+      }
+
+      function resizeCanvasToDisplay(canvas) {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        const width = Math.max(1, Math.round(rect.width * dpr));
+        const height = Math.max(1, Math.round(rect.height * dpr));
+        if (canvas.width !== width || canvas.height !== height) {
+          canvas.width = width;
+          canvas.height = height;
+        }
+      }
+
+      function drawCell(target, col, row, cellW, cellH, color, width) {
+        target.save();
+        target.strokeStyle = color;
+        target.lineWidth = width;
+        target.strokeRect(col * cellW + width, row * cellH + width, cellW - width * 2, cellH - width * 2);
+        target.restore();
+      }
+
+      function normalize(value, min, max) {
+        if (!(max > min)) return 0;
+        return clamp((value - min) / (max - min), 0, 1);
+      }
+
+      function sampleGradient(stops, t) {
+        const scaled = clamp(t, 0, 1) * (stops.length - 1);
+        const i = Math.min(stops.length - 2, Math.floor(scaled));
+        const f = scaled - i;
+        const a = stops[i];
+        const b = stops[i + 1];
+        return [
+          Math.round(a[0] + (b[0] - a[0]) * f),
+          Math.round(a[1] + (b[1] - a[1]) * f),
+          Math.round(a[2] + (b[2] - a[2]) * f),
+        ];
+      }
+
+      function decodeBase64(data) {
+        const raw = atob(data);
+        const arr = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i += 1) arr[i] = raw.charCodeAt(i);
+        return arr;
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function varColor(name) {
+        return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      }
+
+      const COLOR_MAPS = {
+        inferno: [
+          [5, 4, 20], [45, 12, 84], [112, 31, 129], [187, 55, 84],
+          [249, 142, 8], [252, 255, 164],
+        ],
+        turbo: [
+          [48, 18, 59], [58, 97, 214], [38, 188, 225], [97, 252, 108],
+          [248, 216, 50], [240, 74, 35], [122, 4, 3],
+        ],
+        viridis: [
+          [68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98],
+          [253, 231, 37],
+        ],
+        coolwarm: [
+          [58, 76, 192], [118, 154, 231], [221, 221, 221], [238, 132, 104],
+          [179, 3, 38],
+        ],
+      };
+    })();
+  </script>
+</body>
+</html>
