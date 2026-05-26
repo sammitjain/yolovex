@@ -134,6 +134,28 @@ Region to fit so it acts as one Node in its parent's layout. The recursion that
 makes nesting and flow compose.
 _Avoid_: nested layout, hierarchical layout (acceptable synonyms).
 
+### Operation kinds
+
+**Split op**:
+The `.split()` / `.chunk()` operation — cuts one tensor into several pieces
+along a dimension (channel-halving in C2f/C3k2/C2PSA, the QKV slice in
+Attention). In fx it returns a *tuple*, so its node carries no single tensor;
+its pieces surface as the (canvas-hidden) `getitem` children. On the side panel
+it gets **per-output brochures** (one per piece, each piece's size read off its
+own shape). A split op is *a* Split (the out-degree ≥ 2 shape), but not every
+Split is a split op.
+_Avoid_: chunk node, tuple op.
+
+**Shape op**:
+A node that only *relabels axes* without changing values — `view`, `reshape`,
+`transpose`, `permute`, `flatten`, `squeeze`/`unsqueeze`, `contiguous`. Handled
+specially: an adaptive-aspect channel brochure on deliberate selection (tile
+uses the tensor's own H×W, not the image's), a shape-transformation IO card
+(in-shape → out-shape, not thumbnails), and **passthrough** in the play-flow —
+the overlay keeps the prior frame with a friendly caption ("reshaped") because
+nothing changed in image space.
+_Avoid_: shape-only node, view op (informal).
+
 ### Styling
 
 **Token**:
@@ -193,6 +215,15 @@ the activation).
 The instance-level panel layer — IO strip, channel brochure, statistics — for
 the selected Node on the current image.
 _Avoid_: channel stack (that is one component of it).
+
+**Attention map**:
+For a chosen query patch in the C2PSA attention block, that patch's row of the
+post-softmax attention matrix, reshaped to the feature grid (20×20 for yolo26n
+at imgsz=640) and upsampled over the input image — "which other patches did this
+one find *similar*?" Content similarity only (the positional bias `pe` is added
+to the values, not these weights), coarse (each cell ≈ a 32-px patch), and
+per-head (yolo26n has 2). An interpretation aid, not an object mask.
+_Avoid_: attention mask, saliency map.
 
 ## Flagged ambiguities
 

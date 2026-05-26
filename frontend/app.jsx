@@ -29,6 +29,61 @@ function isDeferred(active) {
   return !!(active && window.YV_ACT?.meta?.skipped?.includes(active.idx));
 }
 
+// Op-node kinds (subkind is classified in expand.jsx and rides on the payload).
+const isSplitOp = (sel) => sel?.subkind === 'split';
+const isShapeOp = (sel) => sel?.subkind === 'shape';
+
+// Per-node instance shapes for one L1 block: { fxName: [..]|[[..]]|null }.
+// A null (or non-array) shape marks a scalar / shape-argument node, not a tensor.
+function instanceShapes(idx) {
+  const inst = window.YV_SPEC?.instances?.find(i => i.idx === idx);
+  return inst?.shapes_by_node || {};
+}
+
+// A split/chunk op's outputs are its (canvas-hidden) getitem children, each one
+// already captured as a 4-D tensor in YV_ACT.sub. Returns them ordered by the
+// getitem index, with each piece's captured activation (carrying its own shape).
+function splitOpOutputs(selected) {
+  const block = window.YV_ACT?.nodes?.[String(selected.idx)];
+  const arch = window.YV.buildArch();
+  const archBlock = arch.find(a => a.idx === selected.idx);
+  const spec = archBlock && window.YV_SPEC?.specs?.[archBlock.specId];
+  if (!block || !spec || !selected.fxKey) return [];
+  const nameToNode = new Map(spec.graph.nodes.map(n => [n.name, n]));
+  const outs = [];
+  for (const [s, t] of spec.graph.edges) {
+    if (s !== selected.fxKey) continue;
+    const n = nameToNode.get(t);
+    if (!n) continue;
+    if (String(n.target || '').split('.').pop() !== 'getitem') continue;
+    const gi = Array.isArray(n.args) ? n.args[1] : null;
+    outs.push({ index: typeof gi === 'number' ? gi : outs.length, fxKey: t, act: block.sub?.[t] || null });
+  }
+  outs.sort((a, b) => a.index - b.index);
+  return outs;
+}
+
+// Fit a tensor's true H×W (last two dims) into a max box, preserving aspect, so
+// reshaped / non-image tensors aren't stretched to the image aspect. Used by
+// both the brochure preview and the IO-strip tiles.
+function fitBox(shape, maxW, maxH) {
+  if (!Array.isArray(shape) || shape.length < 2) return { width: maxW, height: maxH };
+  const H = shape[shape.length - 2], W = shape[shape.length - 1];
+  if (!H || !W) return { width: maxW, height: maxH };
+  let w = maxW, h = (maxW * H) / W;
+  if (h > maxH) { h = maxH; w = (maxH * W) / H; }
+  return { width: Math.round(w), height: Math.round(h) };
+}
+
+// Learner-facing verb for a shape op, by its fx node name (strip trailing _N).
+function shapeOpVerb(fxKey) {
+  const op = String(fxKey || '').replace(/_\d+$/, '');
+  if (op === 'transpose' || op === 'permute') return 'axes reordered';
+  if (op === 'flatten') return 'flattened';
+  if (op === 'squeeze' || op === 'unsqueeze') return 'reshaped';
+  return 'reshaped';
+}
+
 // =============================================================================
 // Learner-facing copy per type. Content lives in content/blocks.js
 // (window.YV_CONTENT); this only reads from it. title/blurb feed the panel
@@ -80,6 +135,7 @@ function subUpstreamSources(idx, members) {
   const memberSet = new Set(members);
   const nameToNode = new Map(spec.graph.nodes.map(n => [n.name, n]));
   const captured = window.YV_ACT?.nodes?.[String(idx)]?.sub || {};
+  const shapes = instanceShapes(idx);
 
   const incomingByDst = new Map();
   for (const [s, t] of spec.graph.edges) {
@@ -99,6 +155,13 @@ function subUpstreamSources(idx, members) {
     if (!n) return [];
     if (memberSet.has(name)) return [];
     if (n.op === 'placeholder' || n.op === 'get_attr') return [{ kind: 'L1' }];
+    // Drop scalar / shape-argument nodes (e.g. the B,C,H,W extracted from
+    // x.shape feeding a reshape) — they're tracked as fx edges but carry no
+    // tensor data, so they must not count as inputs nor be chased to the L1
+    // input. A known non-tensor shape (null / not a list) is the signal.
+    if (Object.prototype.hasOwnProperty.call(shapes, name) && !Array.isArray(shapes[name])) {
+      return [];
+    }
     const last = String(n.target || '').split('.').pop();
     const hiddenVisually = (n.op === 'call_function' && last === 'getitem');
     if (hiddenVisually || !captured[name]) {
@@ -212,7 +275,10 @@ function FlowOverlay({ active, lastActive }) {
     } else {
       const act = lookupActivation(display);
       const friendly = copyFor(type).title.split(' — ')[0] || type;
-      if (act && act.mean) {
+      // Shape ops capture a tensor, but it only relabels axes — showing it
+      // stretched to image aspect would mislead. Force passthrough with a
+      // learner-friendly caption instead (the image story is unchanged here).
+      if (!isShapeOp(display) && act && act.mean) {
         src = act.mean;
         stretchedActivation = true;
         if (display.pathKey == null) {
@@ -232,8 +298,13 @@ function FlowOverlay({ active, lastActive }) {
         const stepLabel = display.pathKey != null
           ? (display.pathKey.split('/').pop() || display.fxKey || '')
           : friendly;
-        label = `[${display.idx}] ${stepLabel} · passthrough`;
-        sub = 'no 4-D tensor — showing prior activation';
+        if (isShapeOp(display)) {
+          label = `[${display.idx}] ${stepLabel} · ${shapeOpVerb(display.fxKey)}`;
+          sub = 'layout only — image unchanged';
+        } else {
+          label = `[${display.idx}] ${stepLabel} · passthrough`;
+          sub = 'no 4-D tensor — showing prior activation';
+        }
         usingFallback = true;
       } else {
         label = `[${display.idx}] ${friendly || ''}`;
@@ -280,10 +351,29 @@ function IOStrip({ active, output }) {
     ? l1UpstreamSources(active.idx)
     : subUpstreamSources(active.idx, active.members);
 
-  const tile = { width: 96, height: 120 };
-  const concat = { width: 80, height: 100 };
+  // Shape ops relabel axes without changing values — thumbnails would be
+  // misleading (and identical-looking). Show the transform as in→out shapes.
+  if (isShapeOp(active)) {
+    const inShape = sources.length ? shapeOfSource(sources[0]) : null;
+    return (
+      <section className="panel-section">
+        <h4 className="section-label">Shape transform</h4>
+        <div className="shape-transform">
+          <span className="shape-transform__dim mono">{fmtShape(inShape)}</span>
+          <span className="shape-transform__arrow">→</span>
+          <span className="shape-transform__dim mono">{fmtShape(output?.shape)}</span>
+        </div>
+        <div className="shape-caption">Same values, re-laid-out — no data changes here.</div>
+      </section>
+    );
+  }
+
   const isMulti = sources.length > 1;
-  const sizeStyle = isMulti ? concat : tile;
+  // Each tile is sized from its tensor's own H×W so non-image tensors (the
+  // split's 32×300 / 64×300 pieces, softmax's 300×300, …) render truthfully
+  // instead of being squashed to the image aspect. Multi-input strips use a
+  // slightly smaller box.
+  const inMaxW = isMulti ? 80 : 96, inMaxH = isMulti ? 100 : 120;
 
   const inputCaption = sources
     .map(s => fmtShape(shapeOfSource(s)))
@@ -294,17 +384,18 @@ function IOStrip({ active, output }) {
       <h4 className="section-label">Input → Output</h4>
       <div className="io-strip">
         {sources.length === 0 ? (
-          <div className="io-tile" style={{ ...tile, background: '#f1f5f9' }} />
+          <div className="io-tile" style={{ width: inMaxW, height: inMaxH, background: '#f1f5f9' }} />
         ) : (
           <div className="io-pair">
             {sources.map((s, i) => {
               const src = thumbnailForSource(s, inputImageUrl);
+              const dims = fitBox(shapeOfSource(s), inMaxW, inMaxH);
               return (
                 <React.Fragment key={i}>
                   {i > 0 && <span className="plus">+</span>}
                   {src
-                    ? <img src={src} alt="" className="io-tile" style={sizeStyle} />
-                    : <div className="io-tile" style={{ ...sizeStyle, background: '#f1f5f9' }} />}
+                    ? <img src={src} alt="" className="io-tile" style={dims} />
+                    : <div className="io-tile" style={{ ...dims, background: '#f1f5f9' }} />}
                 </React.Fragment>
               );
             })}
@@ -312,8 +403,8 @@ function IOStrip({ active, output }) {
         )}
         <span className="arrow">→</span>
         {output?.mean
-          ? <img src={output.mean} alt="" className="io-tile" style={tile} />
-          : <div className="io-tile" style={{ ...tile, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#94a3b8' }}>no output</div>
+          ? <img src={output.mean} alt="" className="io-tile" style={fitBox(output.shape, 96, 120)} />
+          : <div className="io-tile" style={{ width: 96, height: 120, background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#94a3b8' }}>no output</div>
         }
       </div>
       <div className="shape-caption">
@@ -729,9 +820,11 @@ function DetailPanel({ selected, onClose, panelRef }) {
   // is auto-fill, so the visible columns adapt to whatever K + thumb size
   // produces — last row may have fewer items.
   const [topK, setTopK] = useState(8);
+  // Which output of a split/chunk op is shown (its pieces are separate tensors).
+  const [activeOut, setActiveOut] = useState(0);
 
-  // Reset pinned/hovered when the selection changes.
-  useEffect(() => { setPinnedCh(0); setHoveredCh(null); }, [selected?.idx, selected?.fxKey, selected?.pathKey]);
+  // Reset pinned/hovered/output when the selection changes.
+  useEffect(() => { setPinnedCh(0); setHoveredCh(null); setActiveOut(0); }, [selected?.idx, selected?.fxKey, selected?.pathKey]);
 
   if (!selected) return <aside className="detail-panel" ref={panelRef} aria-hidden />;
 
@@ -807,7 +900,13 @@ function DetailPanel({ selected, onClose, panelRef }) {
     : `[${selected.idx} · ${selected.pathKey}] ${copy.title}`;
 
   const deferred = isDeferred(selected);
-  const act = deferred ? null : lookupActivation(selected);
+  // A split/chunk op carries no single tensor; its pieces are the getitem
+  // children. Show one brochure per piece, switchable via tabs.
+  const splitOuts = !deferred && isSplitOp(selected) ? splitOpOutputs(selected) : [];
+  const act = deferred
+    ? null
+    : (splitOuts.length ? splitOuts[Math.min(activeOut, splitOuts.length - 1)].act
+       : lookupActivation(selected));
 
   const visibleCh = act?.topK?.length || 0;
   const activeCh = hoveredCh != null ? hoveredCh : pinnedCh;
@@ -860,6 +959,20 @@ function DetailPanel({ selected, onClose, panelRef }) {
 
         {act && (
           <>
+            {splitOuts.length > 1 && (
+              <div className="split-out-tabs">
+                {splitOuts.map((o, i) => (
+                  <button
+                    key={o.fxKey}
+                    className={`split-out-tab ${i === Math.min(activeOut, splitOuts.length - 1) ? 'active' : ''}`}
+                    onClick={() => setActiveOut(i)}
+                  >
+                    out {o.index}
+                    <span className="split-out-tab__shape mono">{fmtShape(o.act?.shape)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             <IOStrip active={selected} output={act} />
 
             {visibleCh > 0 && (
@@ -888,8 +1001,8 @@ function DetailPanel({ selected, onClose, panelRef }) {
                       src={act.topK[Math.min(activeCh, visibleCh - 1)]}
                       alt={`channel ${trueChIdx(activeCh)}`}
                       style={{
-                        width: 170, height: 210,
-                        objectFit: 'fill',     // stretch — match overlay
+                        ...fitBox(act.shape, 170, 210),
+                        objectFit: 'fill',     // fill — box already matches tensor aspect
                         imageRendering: 'pixelated',
                         background: '#0f172a',
                         display: 'block', borderRadius: 4,

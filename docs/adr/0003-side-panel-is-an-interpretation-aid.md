@@ -48,6 +48,22 @@ exactly these content elements, grouped in three layers:
 - **statistics** — raw min/max/mean/std summary. Kept (cheap; already computed);
   may be demoted/toggled later if it proves low-value.
 
+**Op nodes in the Activation view.** Op nodes that yield no `(B,C,H,W)` image
+still get a view rather than a "No 4-D tensor" dead end. **Split ops**
+(`.split()`/`.chunk()`) show **per-output** brochures, sourced from their
+already-captured (canvas-hidden) `getitem` children, each piece's size read off
+its shape. **Shape ops** (value-preserving axis relabels —
+`view`/`reshape`/`transpose`/…) show an adaptive-aspect brochure plus a
+shape-transformation IO card (in→out shape) and stay **passthrough** in the
+play-flow with a friendly caption, since no value changed in image space — and
+because they *do* capture a tensor now, that passthrough is decided by op-class,
+not by an empty capture. Consequently the channel brochure renders *any* 4-D
+tensor (tile aspect driven by the tensor's own H×W, not the image's), and the IO
+upstream walk ignores scalar/shape-argument edges (they aren't tensor inputs).
+Both the brochure preview and the IO-strip tiles size to the tensor's true H×W
+(via `fitBox`), so non-image tensors (a split's `32×300` piece, softmax's
+`300×300`) render at their real aspect instead of being squashed to the image's.
+
 **3. Interpretation** (new, not yet built) — *what to look for* in this
 activation and whether anything is notable. Distinct from Intuition (which
 explains the block, not the picture). **Hand-authored**, tightly scoped, and
