@@ -29,6 +29,29 @@ term crystallises, update `CONTEXT.md` (glossary only) or add an ADR; when a
 *work item* surfaces, add it to `ROADMAP.md`. Don't let docs drift from code,
 and don't use ADRs as a to-do list.
 
+## Working alongside Codex (branching)
+
+Claude and Codex work the same repo on independent problems with occasional
+shared dependencies. The convention (mirrored in `AGENTS.md`):
+
+- **Trunk-based.** `main` is the single integration point and stays green.
+  Prefer small, frequently-merged slices over long-lived forks.
+- **Branch per topic, namespaced by agent:** `claude/<topic>` (Codex uses
+  `codex/<topic>`). The prefix shows ownership at a glance and makes orphan
+  cleanup trivial (`git branch --merged main | grep claude/`).
+- **Delete on merge.** Once a branch lands in `main`, delete the branch *and*
+  remove its worktree (`git worktree remove …`). Leftover branches/worktrees
+  are how the repo accumulated stale `claude/*` and `codex/*` cruft before.
+- **Overlap → integrate small and often.** If a shared dependency is needed
+  first, land *it* to `main` as its own tiny slice, then both agents build on
+  it. Don't sit on two long-lived branches editing the same files; whoever
+  lands first wins and the other rebases on `main`.
+- **Worktree storage note.** Worktrees share one `.git` (history isn't
+  duplicated) and a working copy is cheap (~14 MB). The real cost is running
+  `uv sync` *inside* a worktree — that grows a per-worktree 1.3 GB `.venv`.
+  Prefer reusing the main `.venv`; if you must sync in a worktree, remove the
+  worktree when done.
+
 ## Notes
 
 - `docs/DEVNOTES.archive.md` is historical and does NOT describe current code.

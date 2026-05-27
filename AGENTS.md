@@ -74,8 +74,31 @@ link the work from `ROADMAP.md`. Keep `CONTEXT.md` for shared vocabulary only.
   files unless the user explicitly asks.
 - If Codex-specific notes grow beyond this file, put them under `docs/codex/`
   rather than mixing them into Claude-owned files.
-- Before implementation work, create or switch to a `codex/...` branch from this
-  worktree. Keep Claude's branches, preview config, and scratch files separate.
+- Before implementation work, create or switch to a `codex/<topic>` branch from
+  this worktree. Keep Claude's branches, preview config, and scratch files
+  separate.
 - Check `git status --short --branch` before edits and before finishing. Assume
   unrelated changes may belong to the user or another agent; work around them
   rather than reverting them.
+
+## Branching convention (shared with Claude)
+
+Both agents work the same repo on independent problems with occasional shared
+dependencies. Mirrored in `CLAUDE.md`:
+
+- **Trunk-based.** `main` is the single integration point and stays green.
+  Prefer small, frequently-merged slices over long-lived forks.
+- **Branch per topic, namespaced by agent:** `codex/<topic>` (Claude uses
+  `claude/<topic>`). The prefix shows ownership and makes cleanup trivial
+  (`git branch --merged main | grep codex/`).
+- **Delete on merge.** Once a branch lands in `main`, delete the branch *and*
+  remove its worktree (`git worktree remove …`). Don't leave stale branches or
+  worktrees behind.
+- **Overlap → integrate small and often.** If a shared dependency is needed
+  first, land *it* to `main` as its own tiny slice, then build on it. Don't sit
+  on two long-lived branches editing the same files; whoever lands first wins
+  and the other rebases on `main`.
+- **Worktree storage:** worktrees share one `.git` (history isn't duplicated)
+  and a working copy is cheap. The real cost is running `uv sync` *inside* a
+  worktree — that grows a per-worktree ~1.3 GB `.venv`. Prefer the main `.venv`;
+  if you must sync in a worktree, remove the worktree when done.
