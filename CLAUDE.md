@@ -54,7 +54,6 @@ shared dependencies. The convention (mirrored in `AGENTS.md`):
 
 ## Notes
 
-- `docs/DEVNOTES.archive.md` is historical and does NOT describe current code.
 - Frontend has no build step (Babel-in-browser, `window.YV` globals); the real
   requirement is free static-hostable output, not "never use tooling" (see 0001).
 - Prefer the live preview over screenshots when verifying UI; let the user drive

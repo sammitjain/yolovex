@@ -84,4 +84,3 @@ results/          # screenshots used in this README
 
 - [`CONTEXT.md`](CONTEXT.md) — shared vocabulary for the diagram/layout domain (the canonical terms used throughout the frontend).
 - [`docs/adr/`](docs/adr/) — architectural decisions and their rationale (layout engine, design tokens, side-panel content model, hosting).
-- [`docs/DEVNOTES.archive.md`](docs/DEVNOTES.archive.md) — historical build notes (archived; describes an older frontend, kept for context only).

@@ -219,13 +219,48 @@ the selected Node on the current image.
 _Avoid_: channel stack (that is one component of it).
 
 **Attention map**:
-For a chosen query patch in the C2PSA attention block, that patch's row of the
-post-softmax attention matrix, reshaped to the feature grid (20×20 for yolo26n
-at imgsz=640) and upsampled over the input image — "which other patches did this
-one find *similar*?" Content similarity only (the positional bias `pe` is added
-to the values, not these weights), coarse (each cell ≈ a 32-px patch), and
+For a chosen Query patch in the C2PSA attention block, that patch's row of the
+post-softmax attention matrix (the `softmax` fx node at
+`0_PSABlock/attn/_op/softmax`), reshaped to the feature grid and upsampled over
+the input image — "which other patches did this one find *similar*?" The grid
+is **rectangular and aspect-aware**: preprocessing uses
+`LetterBox(new_shape=(imgsz, imgsz), auto=True, stride=32)`, which pads to the
+nearest stride-multiple rectangle rather than a square, so the grid follows the
+letterboxed image's aspect (e.g. 20×15 for the bundled sample at imgsz=640, not
+a fixed 20×20). Content similarity only (the positional bias `pe` is added to
+the values, not these weights), coarse (each cell ≈ a 32-px patch), and
 per-head (yolo26n has 2). An interpretation aid, not an object mask.
 _Avoid_: attention mask, saliency map.
+
+**Query patch**:
+One cell in the attention grid, selected as the row of the post-softmax matrix
+to visualise. Picked by clicking/dragging on the Query tile; corresponds 1:1 to
+a spatial location on the letterboxed input image (one cell ≈ a 32-px patch).
+_Avoid_: query token (the model has no tokens in the NLP sense), query pixel.
+
+**Attention mode**:
+The explicit UI mode entered from the C2PSA panel's "Open attention map"
+affordance. While active, the floating tile region is replaced by a labelled
+**Attention map** instrument (Query tile + Result tile) and selection is
+auto-drilled to the `attn` module group (`0_PSABlock/attn`). It is not a quiet
+reskin of the normal Activation view — the mode is signposted with a heading,
+and toggling off restores the normal flow tile + the prior selection.
+_Avoid_: attention view (use Attention mode for the mode, Attention map for the
+content it renders), attention panel.
+
+**Query tile**:
+In Attention mode, the upper of the two stacked floating tiles. Renders the
+input image with a marker on the selected Query patch; the click/drag surface
+for picking the query.
+_Avoid_: scene canvas (prototype-internal term), input tile.
+
+**Result tile**:
+In Attention mode, the lower of the two stacked floating tiles. Renders the
+selected Query patch's Attention map (one row of the post-softmax matrix,
+upsampled) over a dimmed copy of the same image, so bright cells line up
+spatially with the photo.
+_Avoid_: heatmap tile (the heatmap is the content; the tile is the surface),
+grid tile.
 
 ## Flagged ambiguities
 

@@ -27,8 +27,6 @@ using Babel-in-browser and `window.YV*` globals.
 - [`docs/preview-and-verification.md`](./docs/preview-and-verification.md) has
   useful UI verification targets, but it is written around Claude preview
   tools. In Codex, use the local server plus the Browser plugin instead.
-- [`docs/DEVNOTES.archive.md`](./docs/DEVNOTES.archive.md) is historical only
-  and describes an older frontend that no longer exists.
 
 ## Current shape
 
