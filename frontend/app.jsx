@@ -256,7 +256,7 @@ function fmtShape(s) {
 // Floating overlay — persists last seen activation
 // =============================================================================
 
-function FlowOverlay({ active, lastActive }) {
+function FlowOverlay({ active, lastActive, panelOpen }) {
   const meta = window.YV_ACT?.meta;
   const inputImageUrl = meta ? '../' + meta.image : '../assets/sammit_lighthouse.jpg';
 
@@ -344,7 +344,7 @@ function FlowOverlay({ active, lastActive }) {
   }
 
   return (
-    <div className={`flow-overlay ${usingFallback ? 'using-fallback' : ''}`}>
+    <div className={`flow-overlay ${usingFallback ? 'using-fallback' : ''} ${panelOpen ? 'panel-open' : ''}`}>
       <div className="flow-overlay__frame" style={{ aspectRatio: aspect }}>
         {detectFrame ? (
           <BoxOverlayImage
@@ -1878,7 +1878,7 @@ function App() {
           theme={theme}
           onToggleTheme={toggleTheme}
         />
-        <FlowOverlay active={playing || hover || selected} lastActive={lastActive} />
+        <FlowOverlay active={playing || hover || selected} lastActive={lastActive} panelOpen={!!selected} />
         <DetailPanel selected={selected} onClose={() => setSelected(null)} panelRef={panelRef} />
         {settingsOpen && (
           <SettingsPanel rev={settingsRev} bump={bumpSettings} onClose={() => setSettingsOpen(false)} />

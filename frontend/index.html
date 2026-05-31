@@ -157,7 +157,14 @@
       border: 1px solid var(--line); border-radius: 10px;
       box-shadow: var(--shadow-md);
       padding: 10px; pointer-events: none; z-index: 5;
-      transition: border-color 200ms;
+      transition: border-color 200ms,
+                  right 280ms cubic-bezier(.16,1,.3,1);
+    }
+    /* When the right detail panel is open, slide the tile out from behind it
+       so the selected node's activation stays visible alongside the panel.
+       Panel is 640px wide (right:0); leave a 14px gap. */
+    .flow-overlay.panel-open {
+      right: 654px;     /* 640px panel + 14px gap */
     }
     .flow-overlay.using-fallback {
       border-style: dashed; border-color: var(--ink-4);
