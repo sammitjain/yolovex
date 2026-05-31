@@ -48,43 +48,10 @@ from yolovex.preprocess import _preprocess_for_raw_forward
 
 # ---------------------------------------------------------------------------
 # Hook: capture the softmaxed attention tensor from C2PSA's Attention module
+# (shared with build_assets via yolovex.attention_capture — see ADR-0008)
 # ---------------------------------------------------------------------------
 
-def attach_attn_hook(attn_module) -> dict:
-    """Monkey-patch attn_module.forward to stash the post-softmax attn tensor.
-
-    Returns a dict that will be populated with {'attn': Tensor[B, heads, N, N],
-    'H': int, 'W': int} after the forward pass runs.
-    """
-    captured: dict = {}
-    original_forward = attn_module.forward
-
-    def patched_forward(x):
-        B, C, H, W = x.shape
-        N = H * W
-        qkv = attn_module.qkv(x)
-        q, k, v = qkv.view(
-            B, attn_module.num_heads,
-            attn_module.key_dim * 2 + attn_module.head_dim, N
-        ).split(
-            [attn_module.key_dim, attn_module.key_dim, attn_module.head_dim], dim=2
-        )
-        attn = (q.transpose(-2, -1) @ k) * attn_module.scale
-        attn = attn.softmax(dim=-1)
-        captured["attn"] = attn.detach().cpu()
-        captured["H"] = H
-        captured["W"] = W
-        out = (v @ attn.transpose(-2, -1)).view(B, C, H, W) + attn_module.pe(
-            v.reshape(B, C, H, W)
-        )
-        return attn_module.proj(out)
-
-    attn_module.forward = patched_forward
-
-    def restore():
-        attn_module.forward = original_forward
-
-    return captured, restore
+from yolovex.attention_capture import attach_attn_hook  # noqa: E402, F401
 
 
 # ---------------------------------------------------------------------------

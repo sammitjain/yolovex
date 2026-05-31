@@ -67,11 +67,23 @@ window.YV_ACT.attention = {
   path: '0_PSABlock/attn/_op/softmax',  // the fx node this tensor came from
   heads: 2,
   gridH: 20, gridW: 15,                 // sample-specific; aspect-aware
+  // ---- fields below match scripts/export_attention_json.py's payload exactly
+  // so the prototype and production share one quantize/decode contract:
   dtype: 'uint8',
-  minmaxPerHead: [[min0, max0], [min1, max1]],
-  dataB64: '<base64 uint8 blob, heads × gridH×gridW × gridH×gridW>',
+  shape: [heads, N, N],                 // N = gridH × gridW
+  encoding: 'base64',
+  quantization: 'per-head-linear',
+  min: [min0, min1, ...],               // one entry per head
+  max: [max0, max1, ...],
+  data: '<base64 uint8 blob, heads × N × N, row-major>',
 };
 ```
+
+The fields from `dtype` down match `quantize_heads()` in
+`src/yolovex/attention_capture.py` verbatim; the only additions for the in-app
+context are the `idx` / `path` / `heads` / `gridH` / `gridW` envelope so the
+frontend doesn't have to crack the spec to know where this tensor came from or
+how to reshape it.
 
 Sibling to `YV_ACT.nodes`, **not** nested inside `nodes['10'].sub[...]`. The
 per-node `.sub` dict stores compact shape/stats per fx node; mixing a ~240 KB

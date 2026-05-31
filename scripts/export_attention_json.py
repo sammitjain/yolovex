@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from viz_attention import capture_attention  # noqa: E402
+from yolovex.attention_capture import quantize_heads as _quantize_heads  # noqa: E402
 from yolovex.model import DEFAULT_WEIGHTS  # noqa: E402
 
 
@@ -38,30 +39,6 @@ def _image_data_url(image_bgr: np.ndarray, quality: int) -> str:
         raise RuntimeError("could not JPEG-encode attention preview image")
     encoded = base64.b64encode(buf.tobytes()).decode("ascii")
     return f"data:image/jpeg;base64,{encoded}"
-
-
-def _quantize_heads(attn: np.ndarray) -> dict[str, Any]:
-    """Quantize [heads, N, N] float attention to a head-major uint8 blob."""
-    if attn.ndim != 3:
-        raise ValueError(f"expected [heads,N,N], got shape {attn.shape}")
-
-    heads = attn.shape[0]
-    flat = attn.reshape(heads, -1).astype(np.float32)
-    mins = flat.min(axis=1)
-    maxs = flat.max(axis=1)
-    spans = np.maximum(maxs - mins, 1e-12)
-    q = np.round((flat - mins[:, None]) / spans[:, None] * 255.0)
-    q = np.clip(q, 0, 255).astype(np.uint8).reshape(attn.shape)
-
-    return {
-        "dtype": "uint8",
-        "shape": list(q.shape),
-        "encoding": "base64",
-        "quantization": "per-head-linear",
-        "min": [float(v) for v in mins],
-        "max": [float(v) for v in maxs],
-        "data": base64.b64encode(q.tobytes()).decode("ascii"),
-    }
 
 
 def build_payload(

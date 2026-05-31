@@ -31,6 +31,11 @@ import torch
 import torch.fx
 
 from .activations import capture_with_results
+from .attention_capture import (
+    attach_attn_hook,
+    build_attention_payload,
+    find_attention_module,
+)
 from .rendering import (
     CHANNEL_MAX_DIM,
     CLASS_MAX_DIM,
@@ -318,13 +323,33 @@ def build(
     _emit(progress, "stage", stage="forward", total_blocks=len(blocks))
     block_inputs, in_handles = _capture_block_inputs(blocks)
     block_outputs, out_handles = _capture_block_outputs(blocks)
+    # Attach the eager attention hook (ADR-0008) on the same forward pass —
+    # graceful absence if this model variant has no C2PSA `attn` submodule.
+    attn_idx, attn_module = find_attention_module(blocks)
+    attn_captured: dict = {}
+    attn_restore = None
+    if attn_module is not None:
+        attn_captured, attn_restore = attach_attn_hook(attn_module)
     try:
         with torch.no_grad():
             yolo.model(input_tensor)
     finally:
         for h in in_handles + out_handles:
             h.remove()
+        if attn_restore is not None:
+            attn_restore()
     _check_cancel()
+
+    attention_payload = (
+        build_attention_payload(attn_captured, idx=attn_idx)
+        if attn_idx is not None else None
+    )
+    if attention_payload is not None:
+        _emit(
+            progress, "stage", stage="attention_capture",
+            idx=attention_payload["idx"], heads=attention_payload["heads"],
+            gridH=attention_payload["gridH"], gridW=attention_payload["gridW"],
+        )
 
     skipped: list[int] = []
     detect_indices: list[int] = []
@@ -393,7 +418,7 @@ def build(
     except Exception:
         pass
 
-    return {
+    out: dict[str, Any] = {
         "meta": {
             "weights": weights,
             "image": str(image_path),
@@ -404,6 +429,9 @@ def build(
         },
         "nodes": nodes_out,
     }
+    if attention_payload is not None:
+        out["attention"] = attention_payload
+    return out
 
 
 def write_activations_js(data: dict, out_path: Path) -> None:
