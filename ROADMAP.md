@@ -48,6 +48,18 @@ when it lands; prune Done periodically into git history.
 
 ## Done (recent)
 
+- **IO strip drops internal split-slice getitems on module-level selections.**
+  Tightens the `subUpstreamSources` walk added in the prior "IO strip surfaces
+  the real split slice" item (below): when a captured `getitem` is reached and
+  its tuple parent (the `split` / `chunk` it indexes) is itself already inside
+  the member set, treat it as visually-internal and walk past it. PSABlock and
+  Attention selections inside C2PSA[10] now show one input tile (the C2PSA cv1
+  split's second half, `getitem_1`) instead of four (the real one plus three
+  internal q/k/v slices). The singleton-selection slice-surfacing case from
+  the earlier work is preserved — its parent is *outside* the singleton
+  member set, so the new guard doesn't trigger. See
+  `docs/preview-and-verification.md` for the new assertion + how to verify
+  live.
 - **Attention visualizer is a full-page mode reached from a canvas control
   (ADR-0009).** Replaces the earlier inline side-panel toggle idea sketched in
   ADR-0008 (UX section superseded; the capture pipeline + data contract there
