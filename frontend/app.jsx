@@ -178,14 +178,29 @@ function subUpstreamSources(idx, members) {
     if (Object.prototype.hasOwnProperty.call(shapes, name) && !Array.isArray(shapes[name])) {
       return [];
     }
+    // A captured getitem is normally surfaced as a source — the deliberate
+    // behavior added in 5d1e1f2 so a *singleton* selection like matmul_1
+    // reads its V branch as the slice [1,2,64,300], not the pre-split parent
+    // [1,2,128,300]. BUT when the selection is *module-level* and the
+    // getitem's tuple parent (split / chunk) is itself already inside the
+    // member set, this getitem is an *internal* slice the canvas hides —
+    // surfacing it would falsely add q/k/v slices as module inputs to e.g.
+    // PSABlock or Attention. Treat such an "internal getitem of an internal
+    // split" as transparent and walk past it (the parent is in memberSet,
+    // so the expand recursion bottoms out at the boundary check and adds
+    // nothing — leaving only the real module input).
+    if (n.op === 'call_function' && /(^|\.)getitem$/.test(String(n.target || ''))) {
+      const parents = incomingByDst.get(name) || [];
+      if (parents.some(p => memberSet.has(p))) {
+        const out = [];
+        for (const p of parents) out.push(...expand(p, visited));
+        return out;
+      }
+    }
     // Walk back only through nodes that have NO tensor of their own — tuple
-    // returns (chunk/split), uncaptured getitem, etc. A getitem that WAS
-    // captured (a split's per-piece slice) carries the real slice tensor, so we
-    // stop there and surface it: the IO strip shows the slice's true dims +
-    // thumbnail (e.g. attention's V slice [1,2,64,300], not the pre-split
-    // [1,2,128,300]). The canvas hides the getitem node, but the strip renders
-    // no node names — only the thumbnail and shape — so nothing fx-internal
-    // leaks; the input reads as "the branch coming off the split".
+    // returns (chunk/split), uncaptured getitem, etc. A captured getitem
+    // whose tuple parent is *outside* memberSet still lands here and gets
+    // surfaced (the singleton-selection slice case above).
     if (!captured[name]) {
       const out = [];
       for (const s of (incomingByDst.get(name) || [])) {

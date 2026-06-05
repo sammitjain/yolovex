@@ -138,6 +138,15 @@ Examples:
 - Split-slice dims (attention V·attnᵀ): `subUpstreamSources(10, ['matmul_1'])`
   → two sources whose shapes are `[1,2,64,300]` and `[1,2,300,300]` (NOT
   `[1,2,128,300]`); look each up via `YV_ACT.nodes['10'].sub[fxKey].shape`.
+- Module-level IO inputs filter internal QKV slices: for a PSABlock-level
+  member set inside C2PSA[10] (includes `split_1` but not `getitem_6/7/8`),
+  `subUpstreamSources` returns **exactly one** source — `getitem_1`, the real
+  module input. The same holds for the Attention member set. The internal
+  q/k/v slices are filtered by an "internal getitem of an internal split"
+  rule: their tuple parent (`split_1`) is itself in the member set, so they
+  are visually-internal and don't surface as module inputs. The
+  singleton-selection case above is preserved (parent `split_1` is *not* in
+  `['matmul_1']`).
 
 ## Inspecting ELK output without clicking
 
