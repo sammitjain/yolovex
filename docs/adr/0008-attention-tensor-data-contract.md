@@ -1,7 +1,7 @@
 # Attention tensor: capture mechanism and ship-payload contract
 
 ---
-Status: accepted
+Status: accepted (UX choice superseded by ADR-0009; data contract still stands)
 ---
 
 The Attention map (CONTEXT.md) needs the post-softmax attention matrix from

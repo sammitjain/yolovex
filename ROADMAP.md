@@ -20,18 +20,16 @@ when it lands; prune Done periodically into git history.
   - Add `title`/`blurb` for `DWConv`/`Attention`/`Upsample_torch`.
   - Rewrite mechanical play-flow captions and panel titles for learners.
   - Add per-position overrides in `YV_CONTENT_OVERRIDES` where useful.
-- **Attention visualization — production integration.** Promote the validated
-  prototype into the app: C2PSA/Attention view, query patch click/drag, head
-  selector, mean view, colormap/alpha controls, and upload support.
-  - Keep `scripts/viz_attention.py` as the standalone GIF/MP4 generator.
-  - Fold eager attention capture into `build_assets`; `serve` should compute it
-    for uploaded images.
-  - Ship the attn tensor (~300 KB uint8 for the sample) and render client-side
-    over the input image; bundle precomputed JSON for sample images.
-  - Record the ship-tensor + client-render data contract in an ADR before
-    productionizing it.
-  - Use `docs/attention-visualization.md` and the prototype finding that grids
-    follow the letterboxed image aspect (sample: 20×15, not always 20×20).
+- **Attention visualizer follow-ups.** The full-page visualizer landed
+  (ADR-0009). Remaining polish:
+  - Decide the fate of `frontend/attention-prototype.html` /
+    `attention-prototype-data.js` / `scripts/serve_attention_prototype.py` —
+    keep as reference + offline-upload sandbox, or retire now that the in-app
+    visualizer is the productionised path (see ADR-0009 Consequences).
+  - The visualizer's `<select>` for color map could be a segmented control
+    matching the Head / Per-query/Global ones for visual consistency.
+  - Hide the main app header while in visualizer mode (currently visible
+    above the visualizer overlay), or repurpose it.
 - **Interpretation layer (ADR-0003, layer 3 — not built).** Hand-authored,
   image-robust "what to look for in this activation" note. **L1 canvas blocks
   first**, sub-nodes/leaves incrementally (second priority). Per-type keying to
@@ -50,6 +48,17 @@ when it lands; prune Done periodically into git history.
 
 ## Done (recent)
 
+- **Attention visualizer is a full-page mode reached from a canvas control
+  (ADR-0009).** Replaces the earlier inline side-panel toggle idea sketched in
+  ADR-0008 (UX section superseded; the capture pipeline + data contract there
+  still stand). Two entry points: a `⌖` button in the zoom-controls cluster,
+  and an "Open attention visualizer" affordance shown only on the specific
+  `{ idx: 10, pathKey: '0_PSABlock/attn' }` Attention sub-node (driven by an
+  `openAttentionVisualizer: true` flag in `YV_CONTENT_OVERRIDES`). The
+  visualizer is a React port of `frontend/attention-prototype.html`: image
+  + heatmap on the left, control rail (head segmented, per-query/global
+  normalisation, play, color map, **single** opacity slider — no separate
+  dim, by design — speed, row/col, metrics, mini-grid) on the right.
 - **ELK layout is the primary page; old renderer removed.** `/` now serves the
   ELK explorer (`index-elk.html` → `index.html`; old `index.html` and
   `graph.jsx` deleted, history is the archive). `expand.jsx` was split: its
