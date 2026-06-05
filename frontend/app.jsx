@@ -370,6 +370,474 @@ function FlowOverlay({ active, lastActive, panelOpen }) {
 }
 
 // =============================================================================
+// Attention visualizer (ADR-0009): full-page mode opened from the canvas
+// control cluster. Ports frontend/attention-prototype.html into React; reads
+// the same window.YV_ACT.attention payload (ADR-0008). Single opacity slider —
+// no separate image-dim control (matches the prototype the user validated).
+// =============================================================================
+
+const _ATTN_COLOR_MAPS = {
+  inferno: [
+    [5, 4, 20], [45, 12, 84], [112, 31, 129], [187, 55, 84],
+    [249, 142, 8], [252, 255, 164],
+  ],
+  turbo: [
+    [48, 18, 59], [58, 97, 214], [38, 188, 225], [97, 252, 108],
+    [248, 216, 50], [240, 74, 35], [122, 4, 3],
+  ],
+  viridis: [
+    [68, 1, 84], [59, 82, 139], [33, 145, 140], [94, 201, 98],
+    [253, 231, 37],
+  ],
+  coolwarm: [
+    [58, 76, 192], [118, 154, 231], [221, 221, 221], [238, 132, 104],
+    [179, 3, 38],
+  ],
+};
+
+function _clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function _sampleGradient(stops, t) {
+  const scaled = _clamp(t, 0, 1) * (stops.length - 1);
+  const i = Math.min(stops.length - 2, Math.floor(scaled));
+  const f = scaled - i;
+  const a = stops[i], b = stops[i + 1];
+  return [
+    Math.round(a[0] + (b[0] - a[0]) * f),
+    Math.round(a[1] + (b[1] - a[1]) * f),
+    Math.round(a[2] + (b[2] - a[2]) * f),
+  ];
+}
+
+// Decode the base64 payload once per build/upload. Cached on payload identity
+// so re-renders don't re-decode.
+function _decodeAttnRaw() {
+  const att = window.YV_ACT?.attention;
+  if (!att) return null;
+  if (window.__attnRawCache?.data === att.data) return window.__attnRawCache.raw;
+  const bin = atob(att.data);
+  const raw = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) raw[i] = bin.charCodeAt(i);
+  window.__attnRawCache = { data: att.data, raw };
+  return raw;
+}
+
+function _attentionRow(att, raw, head, queryIdx) {
+  const { heads } = att;
+  const N = att.gridH * att.gridW;
+  const out = new Float32Array(N);
+  if (head === 'mean') {
+    for (let h = 0; h < heads; h++) _addHeadRow(att, raw, out, h, queryIdx, 1 / heads);
+  } else {
+    _addHeadRow(att, raw, out, Number(head), queryIdx, 1);
+  }
+  return out;
+}
+
+function _addHeadRow(att, raw, out, h, queryIdx, scale) {
+  const N = att.gridH * att.gridW;
+  const m = att.min[h], span = Math.max(att.max[h] - att.min[h], 1e-12);
+  const base = h * N * N + queryIdx * N;
+  for (let i = 0; i < N; i++) out[i] += (m + (raw[base + i] / 255) * span) * scale;
+}
+
+function _localRange(row) {
+  let min = Infinity, max = -Infinity;
+  for (let i = 0; i < row.length; i++) {
+    if (row[i] < min) min = row[i];
+    if (row[i] > max) max = row[i];
+  }
+  return { min, max };
+}
+
+function _rowStats(row, gridW) {
+  let sum = 0, peak = -Infinity, peakIdx = 0;
+  for (let i = 0; i < row.length; i++) {
+    const v = row[i];
+    sum += v;
+    if (v > peak) { peak = v; peakIdx = i; }
+  }
+  let entropy = 0;
+  if (sum > 0) {
+    for (let i = 0; i < row.length; i++) {
+      const p = row[i] / sum;
+      if (p > 0) entropy -= p * Math.log2(p);
+    }
+  }
+  return {
+    peak, peakIdx,
+    peakRow: Math.floor(peakIdx / gridW),
+    peakCol: peakIdx % gridW,
+    entropy,
+  };
+}
+
+function _globalRangeFor(att, raw, head, cache) {
+  const key = `global:${head}`;
+  if (cache.has(key)) return cache.get(key);
+  let range;
+  if (head !== 'mean') {
+    const idx = Number(head);
+    range = { min: att.min[idx], max: att.max[idx] };
+  } else {
+    const N = att.gridH * att.gridW;
+    const row = new Float32Array(N);
+    let min = Infinity, max = -Infinity;
+    for (let q = 0; q < N; q++) {
+      row.fill(0);
+      for (let h = 0; h < att.heads; h++) _addHeadRow(att, raw, row, h, q, 1 / att.heads);
+      const r = _localRange(row);
+      if (r.min < min) min = r.min;
+      if (r.max > max) max = r.max;
+    }
+    range = { min, max };
+  }
+  cache.set(key, range);
+  return range;
+}
+
+function _resizeCanvas(canvas) {
+  if (!canvas) return false;
+  const rect = canvas.getBoundingClientRect();
+  const dpr = window.devicePixelRatio || 1;
+  const w = Math.max(1, Math.round(rect.width * dpr));
+  const h = Math.max(1, Math.round(rect.height * dpr));
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w; canvas.height = h;
+    return true;
+  }
+  return false;
+}
+
+function AttentionVisualizer({ onExit }) {
+  const att = window.YV_ACT?.attention;
+  const meta = window.YV_ACT?.meta;
+
+  if (!att) {
+    return (
+      <div className="attn-viz">
+        <div className="attn-viz__missing">
+          <h2>Attention payload not available</h2>
+          <p>This build of <code>activations.js</code> has no <code>YV_ACT.attention</code>.
+            Rebuild assets (or upload a new image) to populate it.</p>
+          <button className="attn-viz__ghost" onClick={onExit}>← Back to architecture</button>
+        </div>
+      </div>
+    );
+  }
+
+  const { gridH, gridW, heads } = att;
+  const tokens = gridH * gridW;
+  const imageUrl = meta ? '../' + meta.image : '../assets/sammit_lighthouse.jpg';
+  const imgAspect = (meta?.image_w && meta?.image_h)
+    ? `${meta.image_w} / ${meta.image_h}`
+    : `${gridW} / ${gridH}`;
+  const imgRatio = (meta?.image_w && meta?.image_h)
+    ? (meta.image_w / meta.image_h)
+    : (gridW / gridH);
+
+  const [head, setHead] = useState('mean');
+  const [norm, setNorm] = useState('query');
+  const [colorMap, setColorMap] = useState('inferno');
+  const [alpha, setAlpha] = useState(0.58);
+  const [row, setRow] = useState(Math.floor(gridH / 2));
+  const [col, setCol] = useState(Math.floor(gridW / 2));
+  const [playing, setPlaying] = useState(false);
+  const [fps, setFps] = useState(8);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [resizeTick, setResizeTick] = useState(0);
+
+  const sceneRef = useRef(null);
+  const gridRef = useRef(null);
+  const imgRef = useRef(null);
+  const heatRef = useRef(null);
+  const globalRangesRef = useRef(new Map());
+
+  // One-time setup: decode bytes, allocate offscreen heat canvas.
+  useEffect(() => {
+    _decodeAttnRaw();
+    const heat = document.createElement('canvas');
+    heat.width = gridW; heat.height = gridH;
+    heatRef.current = heat;
+    globalRangesRef.current = new Map();
+  }, [gridW, gridH]);
+
+  // Track image load.
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img) return;
+    if (img.complete && img.naturalWidth) { setImgLoaded(true); return; }
+    const onLoad = () => setImgLoaded(true);
+    img.addEventListener('load', onLoad);
+    return () => img.removeEventListener('load', onLoad);
+  }, []);
+
+  // Track window resize.
+  useEffect(() => {
+    const onResize = () => setResizeTick(t => t + 1);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  // Recompute the current row + range + stats whenever inputs change.
+  const computed = useMemo(() => {
+    const raw = _decodeAttnRaw();
+    if (!raw) return null;
+    const r = _attentionRow(att, raw, head, row * gridW + col);
+    const range = norm === 'query'
+      ? _localRange(r)
+      : _globalRangeFor(att, raw, head, globalRangesRef.current);
+    const stats = _rowStats(r, gridW);
+    return { row: r, range, stats };
+  }, [att, head, norm, row, col, gridW]);
+
+  // Paint the offscreen heat canvas + composite onto scene + grid.
+  useEffect(() => {
+    if (!computed || !heatRef.current || !sceneRef.current || !gridRef.current) return;
+    if (!imgLoaded || !imgRef.current) return;
+
+    const { row: rowData, range, stats } = computed;
+    const heat = heatRef.current;
+    const heatCtx = heat.getContext('2d', { willReadFrequently: true });
+    const stops = _ATTN_COLOR_MAPS[colorMap] || _ATTN_COLOR_MAPS.inferno;
+    const span = Math.max(range.max - range.min, 1e-12);
+
+    const img = heatCtx.createImageData(gridW, gridH);
+    for (let i = 0; i < rowData.length; i++) {
+      const t = _clamp((rowData[i] - range.min) / span, 0, 1);
+      const c = _sampleGradient(stops, t);
+      const o = i * 4;
+      img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
+    }
+    heatCtx.putImageData(img, 0, 0);
+
+    // Scene canvas: image + heat overlay + cell markers + grid lines.
+    const scene = sceneRef.current;
+    _resizeCanvas(scene);
+    const sw = scene.width, sh = scene.height;
+    const ctx = scene.getContext('2d');
+    ctx.clearRect(0, 0, sw, sh);
+    ctx.drawImage(imgRef.current, 0, 0, sw, sh);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.imageSmoothingEnabled = true;
+    ctx.drawImage(heat, 0, 0, sw, sh);
+    ctx.restore();
+
+    const cellW = sw / gridW, cellH = sh / gridH;
+    _drawCell(ctx, col, row, cellW, cellH, '#22d3ee', 2.5);
+    _drawCell(ctx, stats.peakCol, stats.peakRow, cellW, cellH, '#f4bd50', 2);
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1;
+    for (let x = 0; x <= gridW; x++) {
+      const px = Math.round(x * cellW) + 0.5;
+      ctx.beginPath(); ctx.moveTo(px, 0); ctx.lineTo(px, sh); ctx.stroke();
+    }
+    for (let y = 0; y <= gridH; y++) {
+      const py = Math.round(y * cellH) + 0.5;
+      ctx.beginPath(); ctx.moveTo(0, py); ctx.lineTo(sw, py); ctx.stroke();
+    }
+    ctx.restore();
+
+    // Mini grid canvas: heat-only, with the query cell marker.
+    const grid = gridRef.current;
+    _resizeCanvas(grid);
+    const gw = grid.width, gh = grid.height;
+    const gctx = grid.getContext('2d');
+    gctx.clearRect(0, 0, gw, gh);
+    gctx.imageSmoothingEnabled = false;
+    gctx.drawImage(heat, 0, 0, gw, gh);
+    gctx.strokeStyle = 'rgba(255,255,255,0.16)'; gctx.lineWidth = 1;
+    const gcw = gw / gridW, gch = gh / gridH;
+    for (let x = 0; x <= gridW; x++) {
+      gctx.beginPath();
+      gctx.moveTo(Math.round(x * gcw) + 0.5, 0);
+      gctx.lineTo(Math.round(x * gcw) + 0.5, gh);
+      gctx.stroke();
+    }
+    for (let y = 0; y <= gridH; y++) {
+      gctx.beginPath();
+      gctx.moveTo(0, Math.round(y * gch) + 0.5);
+      gctx.lineTo(gw, Math.round(y * gch) + 0.5);
+      gctx.stroke();
+    }
+    _drawCell(gctx, col, row, gcw, gch, '#22d3ee', 2.5);
+  }, [computed, colorMap, alpha, imgLoaded, gridH, gridW, row, col, resizeTick]);
+
+  // Play loop.
+  useEffect(() => {
+    if (!playing) return;
+    const id = setInterval(() => {
+      const next = (row * gridW + col + 1) % tokens;
+      setRow(Math.floor(next / gridW));
+      setCol(next % gridW);
+    }, Math.max(30, 1000 / fps));
+    return () => clearInterval(id);
+  }, [playing, fps, row, col, tokens, gridW]);
+
+  const setQuery = useCallback((r, c) => {
+    setRow(_clamp(Math.round(r), 0, gridH - 1));
+    setCol(_clamp(Math.round(c), 0, gridW - 1));
+  }, [gridH, gridW]);
+
+  const dragRef = useRef({ scene: false, grid: false });
+  const onPointerDownCanvas = (kind) => (e) => {
+    dragRef.current[kind] = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    _pickQuery(e, kind === 'scene' ? sceneRef.current : gridRef.current, gridH, gridW, setQuery);
+  };
+  const onPointerMoveCanvas = (kind) => (e) => {
+    if (!dragRef.current[kind]) return;
+    _pickQuery(e, kind === 'scene' ? sceneRef.current : gridRef.current, gridH, gridW, setQuery);
+  };
+  const onPointerUpCanvas = (kind) => () => { dragRef.current[kind] = false; };
+
+  const stats = computed?.stats;
+
+  return (
+    <div className="attn-viz">
+      <main className="attn-viz__stage">
+        <header className="attn-viz__topbar">
+          <div className="attn-viz__title">
+            <strong>Attention map</strong>
+            <span>
+              {gridH}×{gridW} grid · {heads} heads
+              {meta?.imgsz ? ` · ${meta.imgsz}px input` : ''}
+            </span>
+          </div>
+          <div className="attn-viz__controls">
+            <div className="attn-viz__seg">
+              <button
+                className={head === 'mean' ? 'is-active' : ''}
+                onClick={() => setHead('mean')}
+              >Mean</button>
+              {Array.from({ length: heads }, (_, i) => (
+                <button
+                  key={i}
+                  className={head === String(i) ? 'is-active' : ''}
+                  onClick={() => setHead(String(i))}
+                >Head {i}</button>
+              ))}
+            </div>
+            <div className="attn-viz__seg">
+              <button className={norm === 'query' ? 'is-active' : ''} onClick={() => setNorm('query')}>Per query</button>
+              <button className={norm === 'global' ? 'is-active' : ''} onClick={() => setNorm('global')}>Global</button>
+            </div>
+            <button className="attn-viz__ghost" onClick={() => setPlaying(p => !p)}>
+              {playing ? 'Pause' : 'Play'}
+            </button>
+            <button className="attn-viz__ghost" onClick={onExit}>← Back to architecture</button>
+          </div>
+        </header>
+        <div className="attn-viz__canvas-wrap">
+          <div
+            className="attn-viz__frame"
+            style={{ '--image-aspect': imgAspect, '--image-ratio': String(imgRatio) }}
+          >
+            <img ref={imgRef} src={imageUrl} alt="" style={{ display: 'none' }} />
+            <canvas
+              ref={sceneRef}
+              onPointerDown={onPointerDownCanvas('scene')}
+              onPointerMove={onPointerMoveCanvas('scene')}
+              onPointerUp={onPointerUpCanvas('scene')}
+              onPointerCancel={onPointerUpCanvas('scene')}
+            />
+          </div>
+        </div>
+      </main>
+      <aside className="attn-viz__rail">
+        <div>
+          <h1>C2PSA attention map</h1>
+          <div className="sub">C2PSA[10] · PSABlock · attn · post-softmax weights (per ADR-0008).</div>
+        </div>
+        <div className="attn-viz__metrics">
+          <div className="attn-viz__metric">
+            <span className="attn-viz__metric-label">Query</span>
+            <strong>{row}, {col}</strong>
+          </div>
+          <div className="attn-viz__metric">
+            <span className="attn-viz__metric-label">Peak key</span>
+            <strong>{stats ? `${stats.peakRow}, ${stats.peakCol}` : '—'}</strong>
+          </div>
+          <div className="attn-viz__metric">
+            <span className="attn-viz__metric-label">Peak weight</span>
+            <strong>{stats ? stats.peak.toFixed(5) : '—'}</strong>
+          </div>
+          <div className="attn-viz__metric">
+            <span className="attn-viz__metric-label">Entropy</span>
+            <strong>{stats ? stats.entropy.toFixed(2) : '—'}</strong>
+          </div>
+        </div>
+        <div
+          className="attn-viz__grid-frame"
+          style={{ '--grid-aspect': `${gridW} / ${gridH}` }}
+        >
+          <canvas
+            ref={gridRef}
+            onPointerDown={onPointerDownCanvas('grid')}
+            onPointerMove={onPointerMoveCanvas('grid')}
+            onPointerUp={onPointerUpCanvas('grid')}
+            onPointerCancel={onPointerUpCanvas('grid')}
+          />
+        </div>
+        <div className="attn-viz__field">
+          <label>Color map</label>
+          <select value={colorMap} onChange={e => setColorMap(e.target.value)}>
+            <option value="inferno">Inferno</option>
+            <option value="turbo">Turbo</option>
+            <option value="viridis">Viridis</option>
+            <option value="coolwarm">Cool warm</option>
+          </select>
+        </div>
+        <div className="attn-viz__field">
+          <label>Overlay</label>
+          <div className="attn-viz__slider">
+            <input type="range" min="0" max="1" step="0.01" value={alpha}
+              onChange={e => setAlpha(Number(e.target.value))} />
+            <span>{Math.round(alpha * 100)}%</span>
+          </div>
+        </div>
+        <div className="attn-viz__field">
+          <label>Speed</label>
+          <div className="attn-viz__slider">
+            <input type="range" min="2" max="18" step="1" value={fps}
+              onChange={e => setFps(Number(e.target.value))} />
+            <span>{fps} fps</span>
+          </div>
+        </div>
+        <div className="attn-viz__xy">
+          <div className="attn-viz__field">
+            <label>Row</label>
+            <input type="number" min="0" max={gridH - 1} value={row}
+              onChange={e => setQuery(Number(e.target.value), col)} />
+          </div>
+          <div className="attn-viz__field">
+            <label>Col</label>
+            <input type="number" min="0" max={gridW - 1} value={col}
+              onChange={e => setQuery(row, Number(e.target.value))} />
+          </div>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function _drawCell(ctx, c, r, cellW, cellH, color, width) {
+  ctx.save();
+  ctx.strokeStyle = color; ctx.lineWidth = width;
+  ctx.strokeRect(c * cellW + width, r * cellH + width, cellW - width * 2, cellH - width * 2);
+  ctx.restore();
+}
+
+function _pickQuery(e, canvas, gridH, gridW, setQuery) {
+  const rect = canvas.getBoundingClientRect();
+  const x = _clamp(e.clientX - rect.left, 0, rect.width - 1);
+  const y = _clamp(e.clientY - rect.top, 0, rect.height - 1);
+  setQuery(Math.floor((y / rect.height) * gridH), Math.floor((x / rect.width) * gridW));
+}
+
+// =============================================================================
 // IO strip — shows N inputs → output mean
 // =============================================================================
 
@@ -842,7 +1310,7 @@ function BlockContent({ copyKey, content }) {
   );
 }
 
-function DetailPanel({ selected, onClose, panelRef }) {
+function DetailPanel({ selected, onClose, panelRef, onOpenAttention }) {
   const [pinnedCh, setPinnedCh] = useState(0);
   const [hoveredCh, setHoveredCh] = useState(null);
   // How many of the available top-K thumbs to render. The backend emits up to
@@ -965,6 +1433,18 @@ function DetailPanel({ selected, onClose, panelRef }) {
           </div>
           <button className="close-btn" onClick={onClose} aria-label="Close">×</button>
         </header>
+
+        {mergedContent?.openAttentionVisualizer && window.YV_ACT?.attention && onOpenAttention && (
+          <section className="panel-section">
+            <button
+              className="open-attn-viz-btn"
+              onClick={onOpenAttention}
+              title="Switch to the full-page Attention visualizer"
+            >
+              ⌖ Open attention visualizer
+            </button>
+          </section>
+        )}
 
         {deferred && (
           <section className="panel-section">
@@ -1584,6 +2064,9 @@ function App() {
   // at call time, so we just need to invalidate the memo).
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsRev, setSettingsRev] = useState(0);
+  // Attention visualizer (ADR-0009): full-page mode opened from the canvas
+  // control cluster. When on, the AttentionVisualizer replaces Graph + panels.
+  const [attentionMode, setAttentionMode] = useState(false);
   const bumpSettings = useCallback(() => setSettingsRev(r => r + 1), []);
 
   // Theme (light / dark) — applied as data-theme on <html> so the CSS overrides
@@ -1877,13 +2360,26 @@ function App() {
           settingsRev={settingsRev}
           theme={theme}
           onToggleTheme={toggleTheme}
+          onOpenAttention={() => setAttentionMode(true)}
         />
-        <FlowOverlay active={playing || hover || selected} lastActive={lastActive} panelOpen={!!selected} />
-        <DetailPanel selected={selected} onClose={() => setSelected(null)} panelRef={panelRef} />
-        {settingsOpen && (
-          <SettingsPanel rev={settingsRev} bump={bumpSettings} onClose={() => setSettingsOpen(false)} />
+        {!attentionMode && (
+          <>
+            <FlowOverlay active={playing || hover || selected} lastActive={lastActive} panelOpen={!!selected} />
+            <DetailPanel
+              selected={selected}
+              onClose={() => setSelected(null)}
+              panelRef={panelRef}
+              onOpenAttention={() => setAttentionMode(true)}
+            />
+            {settingsOpen && (
+              <SettingsPanel rev={settingsRev} bump={bumpSettings} onClose={() => setSettingsOpen(false)} />
+            )}
+            <BuildProgressOverlay job={uploadJob} onClose={closeUpload} onRetry={retryUpload} />
+          </>
         )}
-        <BuildProgressOverlay job={uploadJob} onClose={closeUpload} onRetry={retryUpload} />
+        {attentionMode && (
+          <AttentionVisualizer onExit={() => setAttentionMode(false)} />
+        )}
       </main>
     </div>
   );

@@ -12,7 +12,7 @@ function formatShape(sh) {
   return null;
 }
 
-function Graph({ selected, hover, playing, onSelect, onHover, onExpandedCountChange, onVisibleOrderChange, settingsRev = 0, theme = 'light', onToggleTheme }) {
+function Graph({ selected, hover, playing, onSelect, onHover, onExpandedCountChange, onVisibleOrderChange, settingsRev = 0, theme = 'light', onToggleTheme, onOpenAttention }) {
   // L1-block id derived from the unified hover/select payload; the styling
   // logic below (edge dimming, lift, selected glow) is L1-only, so sub-node
   // hovers still focus their parent block.
@@ -392,6 +392,12 @@ function Graph({ selected, hover, playing, onSelect, onHover, onExpandedCountCha
           <button onClick={onToggleTheme} className="theme-btn"
             title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>
             {theme === 'dark' ? '☀' : '☾'}
+          </button>
+        )}
+        {onOpenAttention && window.YV_ACT?.attention && (
+          <button onClick={onOpenAttention} className="attn-btn"
+            title="Open the attention visualizer (C2PSA · PSABlock · attn post-softmax weights)">
+            ⌖
           </button>
         )}
       </div>

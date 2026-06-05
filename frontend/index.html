@@ -147,6 +147,150 @@
     .zoom-controls button:hover { background: var(--bg-tint); color: var(--ink); }
     .zoom-controls .fit-btn { font-size: 14px; }
     .zoom-controls .theme-btn { font-size: 14px; }
+    .zoom-controls .attn-btn { font-size: 16px; }
+
+    /* ============== ATTENTION VISUALIZER (full-page mode, ADR-0009) ============== */
+    .attn-viz {
+      position: absolute; inset: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      background: var(--graph-bg);
+      color: var(--ink);
+      z-index: 6;
+    }
+    .attn-viz__stage {
+      min-width: 0;
+      padding: 10px;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 8px;
+    }
+    .attn-viz__topbar {
+      min-height: 48px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px 10px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .attn-viz__title strong {
+      display: block; font: 700 15px/1.2 ui-sans-serif, system-ui, sans-serif;
+    }
+    .attn-viz__title span {
+      display: block; margin-top: 2px; color: var(--ink-3); font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .attn-viz__controls {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end;
+    }
+    .attn-viz__seg {
+      display: inline-flex; gap: 2px; padding: 3px;
+      background: var(--bg-tint); border: 1px solid var(--line); border-radius: 8px;
+    }
+    .attn-viz__seg button {
+      border: 0; background: transparent; color: var(--ink-3);
+      min-height: 28px; padding: 0 9px; border-radius: 6px; cursor: pointer;
+      font: 12px ui-sans-serif, system-ui, sans-serif;
+    }
+    .attn-viz__seg button.is-active {
+      background: var(--panel); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line);
+    }
+    .attn-viz__ghost {
+      border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+      min-height: 30px; padding: 0 12px; border-radius: 6px; cursor: pointer;
+      font: 600 12px ui-sans-serif, system-ui, sans-serif;
+    }
+    .attn-viz__ghost:hover { background: var(--bg-tint); }
+    .attn-viz__canvas-wrap {
+      min-height: 0;
+      display: grid; place-items: start center; align-content: start;
+      padding-top: 2px;
+    }
+    .attn-viz__frame {
+      --image-ratio: 1; --image-aspect: 1 / 1;
+      width: min(100%, calc((100vh - 84px) * var(--image-ratio)));
+      max-height: calc(100vh - 84px);
+      aspect-ratio: var(--image-aspect);
+      position: relative;
+      background: #0a0a0a;
+      border: 1px solid var(--line); border-radius: 8px;
+      overflow: hidden;
+      touch-action: none;
+    }
+    .attn-viz__frame canvas {
+      display: block; width: 100%; height: 100%;
+      cursor: crosshair;
+    }
+    .attn-viz__rail {
+      min-height: 0;
+      padding: 14px;
+      background: var(--panel);
+      border-left: 1px solid var(--line);
+      display: grid;
+      grid-template-rows: auto auto auto auto auto auto auto;
+      gap: 12px;
+      overflow: auto;
+    }
+    .attn-viz__rail h1 { margin: 0; font: 700 17px/1.2 ui-sans-serif, system-ui, sans-serif; }
+    .attn-viz__rail .sub { margin-top: 4px; color: var(--ink-3); font: 12.5px/1.4 ui-sans-serif, system-ui, sans-serif; }
+    .attn-viz__metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .attn-viz__metric {
+      background: var(--bg-tint); border: 1px solid var(--line); border-radius: 6px;
+      padding: 8px; min-width: 0;
+    }
+    .attn-viz__metric-label {
+      color: var(--ink-3); font: 10.5px ui-sans-serif, system-ui, sans-serif;
+      text-transform: uppercase; letter-spacing: .06em;
+    }
+    .attn-viz__metric strong {
+      display: block; margin-top: 2px; font: 600 14px ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .attn-viz__grid-frame {
+      --grid-aspect: 1 / 1;
+      aspect-ratio: var(--grid-aspect);
+      background: var(--bg-tint); border: 1px solid var(--line); border-radius: 6px;
+      overflow: hidden; touch-action: none;
+    }
+    .attn-viz__grid-frame canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
+    .attn-viz__field { display: grid; gap: 6px; }
+    .attn-viz__field label {
+      color: var(--ink-3); font: 10.5px ui-sans-serif, system-ui, sans-serif;
+      text-transform: uppercase; letter-spacing: .06em;
+    }
+    .attn-viz__field select, .attn-viz__field input[type="number"] {
+      width: 100%; min-height: 30px;
+      background: var(--bg-tint); color: var(--ink); border: 1px solid var(--line);
+      border-radius: 6px; padding: 0 9px;
+      font: 12px ui-sans-serif, system-ui, sans-serif;
+    }
+    .attn-viz__slider {
+      display: grid; grid-template-columns: 1fr 46px; align-items: center; gap: 8px;
+    }
+    .attn-viz__slider input[type="range"] { width: 100%; accent-color: var(--accent, #35c4d6); }
+    .attn-viz__slider span {
+      font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--ink-3); text-align: right;
+    }
+    .attn-viz__xy { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .attn-viz__missing {
+      grid-column: 1 / -1;
+      align-self: center; justify-self: center;
+      max-width: 520px;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+      padding: 22px; text-align: center;
+    }
+    .attn-viz__missing h2 { margin: 0 0 8px; font: 700 17px ui-sans-serif, system-ui, sans-serif; }
+    .attn-viz__missing p { margin: 0 0 14px; color: var(--ink-2); font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; }
+
+    /* Side-panel affordance: shown only on the C2PSA[10]/0_PSABlock/attn node. */
+    .open-attn-viz-btn {
+      display: inline-block;
+      padding: 8px 14px;
+      border: 1px solid var(--line); border-radius: 6px;
+      background: var(--panel); color: var(--ink);
+      font: 600 12.5px ui-sans-serif, system-ui, sans-serif;
+      cursor: pointer;
+    }
+    .open-attn-viz-btn:hover { background: var(--bg-tint); }
 
     /* ============== FLOATING OVERLAY (hover-driven) ============== */
     .flow-overlay {

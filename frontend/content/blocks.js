@@ -251,4 +251,17 @@ window.YV_CONTENT_OVERRIDES = {
       "**Block 22 (final C3k2 on the P5 path) is special.** The YAML enables a new `attn=True` flag so its inner repeated module is a `PSABlock` instead of a Bottleneck. Cheap attention right before Detect, exactly where the spatial size is smallest (20×20) but the semantics are richest.",
   },
 
+  // C2PSA[10] · PSABlock · Attention — the one node in the whole network whose
+  // post-softmax weights are captured to a raw tensor (ADR-0008) and rendered
+  // in the dedicated full-page Attention visualizer (ADR-0009). The override
+  // also flags `openAttentionVisualizer: true`, which DetailPanel reads to
+  // render the "Open visualizer" affordance on this node only.
+  "10/0_PSABlock/attn": {
+    openAttentionVisualizer: true,
+    intuition:
+      "This is the one self-attention block in YOLO26n's backbone. Every position on the 20×15 feature map produces a query and asks every other position for context — the `[N, N]` softmax weights are what the **Attention visualizer** renders. A query over a person's foot can pull from the head; a query over background can pull from co-occurring background. Open the visualizer to click around and see it.",
+    technical:
+      "The fx softmax node at `0_PSABlock/attn/_op/softmax` produces the `[1, heads=2, N, N]` matrix shipped to the frontend as `window.YV_ACT.attention` (per-head uint8 + min/max — see ADR-0008). The visualizer dequantises in-browser and lets you switch heads, swap per-query vs global normalisation, change colormap, and play through every query token.",
+  },
+
 };
